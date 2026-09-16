@@ -1,0 +1,13 @@
+# Personal data: your scrobbles and the report built from them are never published.
+# The published site (index.html) ships the tool only, with no data of anyone's inside.
+lastfmstats-*.csv
+*.csv
+lastfm-report.html
+lastfm-report.md
+lastfm-report.csv
+lastfm-report.json
+
+# Local junk
+lens-debug.log
+.DS_Store
+node_modules/

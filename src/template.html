@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Last.fm Lens — scrobble cleanup magnifier</title>
+<style>
+  :root {
+    --page: #f6f7f9;
+    --panel: #ffffff;
+    --border: #e2e5ea;
+    --text: #14181f;
+    --muted: #5c6675;
+    --accent: #c2185b;
+    --accent-soft: #fce4ec;
+    --high: #0f7b4f;
+    --high-bg: #e3f6ec;
+    --medium: #a06400;
+    --medium-bg: #fdf1d8;
+    --low: #6b7280;
+    --low-bg: #eef0f3;
+    --alarm: #b3261e;
+    --alarm-bg: #fdecea;
+    --radius: 10px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #14161a;
+      --panel: #1c1f26;
+      --border: #2b303a;
+      --text: #e8eaee;
+      --muted: #9aa4b2;
+      --accent: #ff5c8a;
+      --accent-soft: #3a1c28;
+      --high: #5fd39a;
+      --high-bg: #16301f;
+      --medium: #f0b357;
+      --medium-bg: #33270f;
+      --low: #9aa4b2;
+      --low-bg: #24282f;
+      --alarm: #ff8a7a;
+      --alarm-bg: #3a1c18;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); }
+  header.masthead { padding: 28px 20px 18px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h1 span.lens { color: var(--accent); }
+  .tagline { color: var(--muted); margin: 0; font-size: 14px; }
+  main { max-width: 1100px; margin: 0 auto 80px; padding: 0 20px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  #dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 46px 20px;
+    text-align: center;
+    background: var(--panel);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+  #dropzone h2 { margin: 0 0 8px; font-size: 19px; }
+  #dropzone p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+  .note { color: var(--muted); font-size: 13px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .kpi b { display: block; font-size: 22px; letter-spacing: -0.02em; }
+  .kpi span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi.lead b { color: var(--accent); }
+  .toolbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--page) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    margin-bottom: 16px;
+  }
+  .toolbar .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  input[type=search], select {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit;
+  }
+  input[type=search] { min-width: 240px; flex: 1; }
+  .button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  .button:hover { border-color: var(--accent); color: var(--accent); }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .button.primary:hover { opacity: .9; color: #fff; }
+  section.group { margin-bottom: 26px; }
+  section.group > h2 { font-size: 18px; margin: 22px 0 10px; }
+  section.group > h2 .group-summary { font-weight: 400; color: var(--muted); font-size: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .card.discarded { opacity: .45; }
+  .card.accepted { border-color: var(--high); box-shadow: inset 3px 0 0 var(--high); }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .tag {
+    font-size: 11.5px; border-radius: 999px; padding: 3px 9px; border: 1px solid transparent;
+    text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+  }
+  .e-high { background: var(--high-bg); color: var(--high); }
+  .e-medium { background: var(--medium-bg); color: var(--medium); }
+  .e-low { background: var(--low-bg); color: var(--low); }
+  .e-info { background: var(--low-bg); color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .action-box {
+    font-family: var(--mono); font-size: 13px; background: var(--page);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .action-box .arrow { color: var(--muted); }
+  .action-box .new { color: var(--high); font-weight: 700; }
+  .action-box .old { color: var(--alarm); }
+  ul.signals { list-style: none; padding: 0; margin: 8px 0; }
+  ul.signals li { position: relative; padding-left: 16px; margin-bottom: 3px; font-size: 13.5px; }
+  ul.signals li::before {
+    content: ""; position: absolute; left: 3px; top: 8px; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--low);
+  }
+  ul.signals li.strong::before { background: var(--high); }
+  ul.signals li.alarm::before { background: var(--alarm); }
+  ul.signals li.note::before { background: var(--medium); }
+  ul.signals li.weak::before { background: var(--low); }
+  .explanation { margin: 8px 0; font-size: 14px; }
+  .warning {
+    background: var(--medium-bg); color: var(--medium); border-radius: 8px;
+    padding: 8px 10px; font-size: 13.5px; margin: 8px 0;
+  }
+  .alarm-box {
+    background: var(--alarm-bg); color: var(--alarm); border-radius: 8px;
+    padding: 8px 10px; font-size: 13.5px; margin: 8px 0; font-weight: 600;
+  }
+  table.data { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+  table.data th, table.data td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  table.data th { color: var(--muted); font-weight: 600; }
+  table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.canonical td { font-weight: 700; }
+  details { margin: 6px 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details[open] summary { margin-bottom: 6px; }
+  .scroller { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .decisions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .decisions .state { font-size: 12.5px; color: var(--muted); }
+  .compact-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13.5px; }
+  .compact-row:hover { background: var(--page); }
+  .compact-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .compact-row .i { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .compact-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .hidden { display: none !important; }
+  .help h3 { font-size: 15px; margin: 16px 0 4px; }
+  .help ul { margin: 4px 0; padding-left: 20px; }
+  .help li { font-size: 13.5px; margin-bottom: 3px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--page); padding: 1px 5px; border-radius: 4px; }
+  .errors { color: var(--alarm); font-size: 13.5px; }
+  .loading { text-align: center; padding: 30px; color: var(--muted); }
+  @media print {
+    .toolbar, .decisions, #dropzone, .button { display: none !important; }
+    body { background: #fff; }
+    .card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1>Last.fm <span class="lens">Lens</span></h1>
+  <p class="tagline">
+    A magnifier for tidying up scrobbles: duplicate artists, combined artist names, inconsistent track
+    titles, missing or clashing albums, duplicate scrobbles and long-tail oddities. <strong>It edits
+    nothing:</strong> it tells you what to look at, with the evidence in plain sight.
+  </p>
+</header>
+
+<main>
+  <div id="dropzone">
+    <h2>Drop your scrobble CSV here</h2>
+    <p>The one from <a href="https://lastfmstats.com" target="_blank" rel="noopener">lastfmstats.com</a>
+       (<code>lastfmstats-yourname.csv</code>) works, as does any CSV with artist, album, track and date columns.</p>
+    <p class="note">Everything is processed in your browser. The file is never uploaded anywhere.</p>
+    <input type="file" id="fileInput" accept=".csv,.txt,text/csv" class="hidden">
+  </div>
+
+  <div id="notices" class="panel hidden"></div>
+
+  <div id="results" class="hidden">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="toolbar">
+      <div class="row" id="typeChips"></div>
+      <div class="row" style="margin-top:8px">
+        <input type="search" id="search" placeholder="Search artist, track, album…">
+        <select id="sort">
+          <option value="confidence">Sort: confidence and impact</option>
+          <option value="impact">Sort: impact</option>
+          <option value="type">Sort: category</option>
+        </select>
+        <button class="button" id="actionableOnly" aria-pressed="false">Actionable only</button>
+        <button class="button" id="compact" aria-pressed="false">Compact view</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="button primary" id="downloadMarkdown">Download report.md</button>
+        <button class="button" id="downloadCsv">Download actions.csv</button>
+        <button class="button" id="downloadJson">Download JSON</button>
+        <button class="button" id="printButton">Print / PDF</button>
+        <span class="note" id="filterState"></span>
+      </div>
+    </div>
+
+    <div id="list"></div>
+
+    <div class="panel help">
+      <h2 style="font-size:17px;margin-top:0">How it works, and where its limits lie</h2>
+      <p class="note" style="margin-top:0">
+        Every finding is a <strong>scored suspicion from 0 to 100</strong>, with the clues that fired and the
+        concrete evidence. The engine proposes; you decide. Nothing in this report asserts that something is
+        definitely wrong.
+      </p>
+      <h3>It is all code</h3>
+      <p class="note" style="margin-top:0">
+        There is no language model and no external service in the analysis: only deterministic functions
+        (normalised keys, sets of tracks, counts and a bounded edit distance) in <code>src/engine.js</code>.
+        The same CSV always produces exactly the same report, and every rule can be read and changed.
+      </p>
+      <h3>Evidence rule</h3>
+      <ul>
+        <li><strong>Sharing a track is required.</strong> An artist duplicate is only proposed when the two
+            names share at least one track, or when the names are identical bar capitalisation, accents or
+            punctuation. Looking similar on its own (starting with “Franc…”, say) never generates a finding.</li>
+        <li>Weak pairs are omitted and counted in the summary, so you always know what was left out. They can be
+            brought back with <code>minimumConfidence: 'low'</code>. Findings folded into a stronger one are
+            counted in the summary too, so nothing disappears quietly.</li>
+      </ul>
+      <h3>What each section looks at</h3>
+      <ul>
+        <li><strong>Duplicate artists:</strong> two names pointing at the same artist. The strong proof is
+            sharing tracks: if every track under “Ana” also sits under “Ana Beltrán”, it is almost certainly
+            the same entry. It also counts whether their scrobbles mix within the same sitting (less than ten
+            minutes apart).</li>
+        <li><strong>Combined artists:</strong> names such as “Ana, Bruno Salas y Cata”. These are flagged
+            only when the <strong>first</strong> artist of the name exists separately in your library, and the
+            proposal is exactly that first one (“Ana”). If the first one does not exist, the first that does is
+            used, with a warning that it may not be the main artist.
+            The same name written without the separator (“Ana Bruno”) is swept into the same finding, because it
+            is the same artist spelled differently.</li>
+        <li><strong>Duplicates never merge into a combined name.</strong> If the most frequent form of a pair is
+            itself a combined name, nothing is merged into it: everything is renamed straight to the artist it
+            stands for. That is why “Ana Bruno” points at “Ana” and never at “Ana, Bruno”, and why a name already
+            covered by a combined-name finding produces only one card rather than two saying the same thing.</li>
+        <li><strong>Inconsistent track titles:</strong> the same track written in several ways under the same
+            artist (capitalisation, “(X)” versus “- X”, with or without a <code>feat.</code> credit).</li>
+        <li><strong>Albums:</strong> albums missing on some scrobbles but present on others, the same title split
+            across several albums (single versus album), and albums spelled in several ways.</li>
+        <li><strong>Duplicate scrobbles:</strong> the same track twice in a row less than a minute apart.</li>
+        <li><strong>Long tail:</strong> artists with one or two scrobbles, likely typos, garbled characters or
+            odd spacing.</li>
+      </ul>
+      <h3>What it does NOT do</h3>
+      <ul>
+        <li>It does not edit your CSV and it does not touch your Last.fm account.</li>
+        <li>It does not decide for you: where two readings are possible, the finding says so explicitly.</li>
+        <li>It does not know any artist’s real discography. “They share 15 tracks” is very good evidence, but it
+            is still an inference from your own data.</li>
+      </ul>
+      <h3>The “good” value when there are two candidates</h3>
+      <ul>
+        <li>By default the proposal is the name that <strong>combines being the most recent, the most frequent
+            and the most complete</strong>, and the card shows all three so you can disagree with it. If one of
+            the three points the other way, a warning appears.</li>
+        <li>The rule can be changed in <code>src/engine.js</code> (<code>RULES.canonical</code>:
+            <code>recent</code>, <code>frequent</code> or <code>score</code>).</li>
+      </ul>
+      <h3>Making the changes in Last.fm</h3>
+      <ul>
+        <li>Edits to artist, track and album are <strong>retroactive</strong>: when you edit one scrobble,
+            Last.fm offers to apply it to every scrobble of that combination (and renaming an artist affects the
+            whole entry). It is a bulk change: look twice.</li>
+        <li>Deleting a duplicate scrobble is one at a time, from the scrobble’s (⋯) menu.</li>
+        <li>Mark items “Accept” or “Discard” here and the actions CSV downloads with your decisions applied.</li>
+      </ul>
+      <h3>Privacy</h3>
+      <ul>
+        <li>The analysis runs entirely in your browser. No server, no upload, no network requests.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div id="loading" class="loading hidden">Analysing…</div>
+</main>
+
+<script>/*__ENGINE__*/</script>
+<script>/*__DATA__*/</script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LastfmLens;
+  var report = window.__REPORT__ || null;
+  var decisions = {};
+  var filters = { types: null, confidence: null, text: '', actionableOnly: false, compact: false, sort: 'confidence' };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  try {
+    decisions = JSON.parse(localStorage.getItem('lastfm-lens-decisions') || '{}') || {};
+  } catch (e) { decisions = {}; }
+
+  function saveDecisions() {
+    try { localStorage.setItem('lastfm-lens-decisions', JSON.stringify(decisions)); } catch (e) {}
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /* ---------------- loading the file ---------------- */
+
+  var dropzone = $('dropzone');
+  var fileInput = $('fileInput');
+
+  dropzone.addEventListener('click', function () { fileInput.click(); });
+  ['dragenter', 'dragover'].forEach(function (eventName) {
+    dropzone.addEventListener(eventName, function (e) { e.preventDefault(); dropzone.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (eventName) {
+    dropzone.addEventListener(eventName, function (e) { e.preventDefault(); dropzone.classList.remove('over'); });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) readFile(file);
+  });
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files && fileInput.files[0]) readFile(fileInput.files[0]);
+  });
+
+  function readFile(file) {
+    $('loading').classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = function () {
+      setTimeout(function () {
+        try {
+          analyseText(String(reader.result), file.name);
+        } catch (e) {
+          $('loading').classList.add('hidden');
+          showNotices(['I could not analyse the file: ' + (e && e.message ? e.message : e)]);
+        }
+      }, 30);
+    };
+    reader.onerror = function () {
+      $('loading').classList.add('hidden');
+      showNotices(['I could not read the file.']);
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  function analyseText(text, fileName) {
+    var parsed = L.readCSV(text, fileName);
+    if (!parsed.scrobbles.length) {
+      $('loading').classList.add('hidden');
+      showNotices(['The CSV has no recognisable scrobble rows.']);
+      return;
+    }
+    report = L.analyse(parsed.scrobbles, { warnings: parsed.warnings, source: fileName });
+    $('loading').classList.add('hidden');
+    dropzone.classList.add('hidden');
+    render(report);
+  }
+
+  function showNotices(items) {
+    var box = $('notices');
+    box.classList.remove('hidden');
+    box.innerHTML = '<div class="errors">' + items.map(escapeHtml).join('<br>') + '</div>';
+  }
+
+  /* ---------------- rendering ---------------- */
+
+  function render(data) {
+    $('results').classList.remove('hidden');
+    var m = data.meta;
+    var affectedPct = m.scrobbles ? Math.round(100 * data.summary.affectedScrobbles / m.scrobbles) : 0;
+    var kpis = [
+      { n: L.util.num(m.scrobbles), t: 'scrobbles' },
+      { n: L.util.num(m.artists), t: 'artists' },
+      { n: L.util.num(m.tracks), t: 'tracks' },
+      { n: L.util.num(m.albums), t: 'albums' },
+      { n: L.util.shortDate(m.from) + ' → ' + L.util.shortDate(m.to), t: 'period' },
+      { n: L.util.num(data.summary.affectedScrobbles) + ' (' + affectedPct + '%)', t: 'scrobbles affected', lead: true },
+      { n: L.util.num(data.summary.highConfidenceActions), t: 'high-confidence actions', lead: true },
+      { n: L.util.num(data.summary.findings), t: 'findings in total' }
+    ];
+    $('kpis').innerHTML = kpis.map(function (k) {
+      return '<div class="kpi' + (k.lead ? ' lead' : '') + '"><b>' + escapeHtml(k.n) + '</b><span>' + escapeHtml(k.t) + '</span></div>';
+    }).join('') +
+      (data.summary.omitted
+        ? '<div class="alarm-box" style="grid-column:1/-1">' + L.util.num(data.summary.omitted) +
+          ' low-confidence findings were left out (name similarities or possible typos with no track in common). ' +
+          'They add nothing: looking similar is not proof of anything. The default rule requires at least one ' +
+          'shared track.</div>'
+        : '') +
+      (data.summary.coveredByStronger
+        ? '<div class="warning" style="grid-column:1/-1">' + L.util.num(data.summary.coveredByStronger) +
+          ' duplicate-name finding(s) were folded into a combined-name finding that already proposes the same ' +
+          'rename, so the same artist is not listed twice.</div>'
+        : '');
+
+    if (m.warnings && m.warnings.length) showNotices(m.warnings);
+
+    var chips = [];
+    data.summary.byType.forEach(function (t) {
+      chips.push('<button class="chip" data-type="' + escapeHtml(t.type) + '" aria-pressed="false">' +
+        escapeHtml(t.label) + '<span class="n">' + L.util.num(t.findings) + '</span></button>');
+    });
+    $('typeChips').innerHTML =
+      '<button class="chip" data-type="" aria-pressed="true">Everything<span class="n">' +
+        L.util.num(data.summary.findings) + '</span></button>' +
+      chips.join('') +
+      '<span style="flex:1"></span>' +
+      ['high', 'medium', 'low'].map(function (level) {
+        return '<button class="chip" data-confidence="' + level + '" aria-pressed="false">' +
+          level.charAt(0).toUpperCase() + level.slice(1) + '</button>';
+      }).join('');
+
+    $('typeChips').addEventListener('click', function (e) {
+      var button = e.target.closest('button.chip');
+      if (!button) return;
+      if (button.dataset.type !== undefined) {
+        filters.types = button.dataset.type ? [button.dataset.type] : null;
+      }
+      if (button.dataset.confidence) {
+        filters.confidence = filters.confidence === button.dataset.confidence ? null : button.dataset.confidence;
+      }
+      Array.prototype.forEach.call($('typeChips').querySelectorAll('.chip'), function (chip) {
+        if (chip.dataset.confidence) {
+          chip.setAttribute('aria-pressed', String(filters.confidence === chip.dataset.confidence));
+        } else if (chip.dataset.type !== undefined) {
+          var active = filters.types ? filters.types[0] === chip.dataset.type : chip.dataset.type === '';
+          chip.setAttribute('aria-pressed', String(active));
+        }
+      });
+      renderList();
+    });
+
+    $('search').addEventListener('input', function () {
+      filters.text = this.value.trim().toLowerCase();
+      renderList();
+    });
+    $('sort').addEventListener('change', function () {
+      filters.sort = this.value;
+      renderList();
+    });
+    $('actionableOnly').addEventListener('click', function () {
+      filters.actionableOnly = !filters.actionableOnly;
+      this.setAttribute('aria-pressed', String(filters.actionableOnly));
+      renderList();
+    });
+    $('compact').addEventListener('click', function () {
+      filters.compact = !filters.compact;
+      this.setAttribute('aria-pressed', String(filters.compact));
+      renderList();
+    });
+    $('printButton').addEventListener('click', function () { window.print(); });
+    $('downloadMarkdown').addEventListener('click', function () {
+      download('lastfm-report.md', L.toMarkdown(report), 'text/markdown');
+    });
+    $('downloadCsv').addEventListener('click', function () {
+      download('lastfm-actions.csv', decisionsCsv(), 'text/csv');
+    });
+    $('downloadJson').addEventListener('click', function () {
+      download('lastfm-report.json', L.toJSON(report), 'application/json');
+    });
+
+    renderList();
+  }
+
+  function download(name, contents, type) {
+    var blob = new Blob([contents], { type: type + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /** Actions CSV with the `decision` column already filled in from the interface. */
+  function decisionsCsv() {
+    var parts = L.toCSV(report).split('\n');
+    var header = parts[0].split(';');
+    var decisionColumn = header.indexOf('decision');
+    var rows = [parts[0]];
+    for (var i = 1; i < parts.length; i++) {
+      var line = parts[i];
+      if (!line) continue;
+      var columns = splitCsvLine(line);
+      var decision = decisions[report.findings[i - 1].id] || 'pending';
+      if (decision === 'discard') continue;
+      columns[decisionColumn] = decision;
+      rows.push(columns.map(csvEscape).join(';'));
+    }
+    return rows.join('\n');
+  }
+
+  function csvEscape(v) {
+    var s = v == null ? '' : String(v);
+    return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function splitCsvLine(line) {
+    var out = [];
+    var field = '';
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (line[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+        } else field += c;
+      } else if (c === '"') inQuotes = true;
+      else if (c === ';') { out.push(field); field = ''; }
+      else field += c;
+    }
+    out.push(field);
+    return out;
+  }
+
+  function passesFilter(f) {
+    if (filters.types && filters.types.indexOf(f.type) < 0) return false;
+    if (filters.confidence && f.confidence !== filters.confidence) return false;
+    if (filters.actionableOnly && f.action === 'review') return false;
+    if (decisions[f.id] === 'discard') return false;
+    if (filters.text) {
+      var haystack = [f.title, f.current, f.proposed, f.explanation].join(' ').toLowerCase();
+      if (haystack.indexOf(filters.text) < 0) return false;
+    }
+    return true;
+  }
+
+  function renderList() {
+    var visible = report.findings.filter(passesFilter);
+    if (filters.sort === 'impact') {
+      visible.sort(function (a, b) { return b.impact - a.impact || b.points - a.points; });
+    } else if (filters.sort === 'type') {
+      visible.sort(function (a, b) {
+        return L.TYPE_ORDER.indexOf(a.type) - L.TYPE_ORDER.indexOf(b.type) || b.impact - a.impact;
+      });
+    }
+    var byType = {};
+    visible.forEach(function (f) {
+      (byType[f.type] = byType[f.type] || []).push(f);
+    });
+    var html = [];
+    L.TYPE_ORDER.forEach(function (type) {
+      var findings = byType[type];
+      if (!findings || !findings.length) return;
+      var impact = findings.reduce(function (a, f) { return a + f.impact; }, 0);
+      var actionable = findings.filter(function (f) { return f.action !== 'review'; }).length;
+      html.push('<section class="group"><h2>' + escapeHtml(L.TYPE_LABELS[type]) +
+        ' <span class="group-summary">— ' + L.util.num(findings.length) + ' finding(s), ' +
+        L.util.num(actionable) + ' actionable, ' + L.util.num(impact) + ' scrobbles affected</span></h2>');
+      var compact = filters.compact || findings.length > 25;
+      if (compact) {
+        html.push('<div class="compact-list">');
+        findings.forEach(function (f) {
+          html.push('<div class="compact-row" data-open="' + escapeHtml(f.id) + '">' +
+            '<span class="tag e-' + f.confidence + '">' + f.confidence + '</span>' +
+            '<span class="t">' + escapeHtml(f.title) + '</span>' +
+            '<span class="i">' + L.util.num(f.impact) + ' sc.</span></div>' +
+            '<div class="hidden">' + card(f) + '</div>');
+        });
+        html.push('</div>');
+      } else {
+        findings.forEach(function (f) { html.push(card(f)); });
+      }
+      html.push('</section>');
+    });
+    if (!visible.length) html.push('<p class="note">Nothing to show with these filters.</p>');
+    $('list').innerHTML = html.join('');
+    $('filterState').textContent = visible.length + ' of ' + report.summary.findings + ' findings visible';
+  }
+
+  function card(f) {
+    var state = decisions[f.id] || 'pending';
+    var className = state === 'discard' ? ' discarded' : state === 'accept' ? ' accepted' : '';
+    var html = [];
+    html.push('<article class="card' + className + '" id="f-' + escapeHtml(f.id) + '">');
+    html.push('<h3>' + escapeHtml(f.title) + '</h3>');
+    html.push('<div class="tags">');
+    html.push('<span class="tag e-' + f.confidence + '">' + f.confidence + ' · ' + f.points + '/100</span>');
+    if (f.impact) html.push('<span class="tag e-info">' + L.util.num(f.impact) + ' scrobbles</span>');
+    html.push('<span class="tag e-info">' + escapeHtml(f.actionLabel) + '</span>');
+    if (f.subtype) html.push('<span class="tag e-info">' + escapeHtml(f.subtype) + '</span>');
+    html.push('</div>');
+
+    if (f.current || f.proposed) {
+      html.push('<div class="action-box"><span class="old">' + escapeHtml(f.current || '—') + '</span>' +
+        ' <span class="arrow">→</span> <span class="new">' + escapeHtml(f.proposed || '—') + '</span></div>');
+    }
+    var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
+    if (alarms.length) {
+      html.push('<div class="alarm-box">Careful: ' + escapeHtml(alarms[0].text) + '</div>');
+    }
+    if (f.signals.length) {
+      html.push('<ul class="signals">' + f.signals.map(function (s) {
+        return '<li class="' + escapeHtml(s.level) + '">' + escapeHtml(s.text) + '</li>';
+      }).join('') + '</ul>');
+    }
+    if (f.explanation) html.push('<p class="explanation">' + escapeHtml(f.explanation) + '</p>');
+    if (f.warning) html.push('<div class="warning">⚠️ ' + escapeHtml(f.warning) + '</div>');
+
+    if (f.variants && f.variants.length) {
+      html.push('<details open><summary>' + escapeHtml(f.variantsTitle || 'Entries that would be merged') + '</summary><table class="data">' +
+        '<tr><th>Name</th><th class="num">Scrobbles</th><th>First</th><th>Last</th></tr>' +
+        f.variants.map(function (v) {
+          return '<tr class="' + (v.canonical ? 'canonical' : '') + '"><td>' + escapeHtml(v.value) +
+            (v.canonical ? ' ← proposed' : '') + '</td><td class="num">' + L.util.num(v.n) +
+            '</td><td>' + escapeHtml(L.util.shortDate(v.first)) + '</td><td>' + escapeHtml(L.util.shortDate(v.last)) + '</td></tr>';
+        }).join('') + '</table></details>');
+    }
+
+    if (f.evidence && f.evidence.items && f.evidence.items.length) {
+      html.push('<details><summary>' + escapeHtml(f.evidence.title) + ' (' + f.evidence.items.length + ')</summary>' +
+        '<div class="scroller"><table class="data"><tr><th>Item</th><th>Detail</th></tr>' +
+        f.evidence.items.map(function (item) {
+          return '<tr><td>' + escapeHtml(item.a) + '</td><td>' + escapeHtml(item.b) + '</td></tr>';
+        }).join('') + '</table></div></details>');
+    }
+    if (f.table) {
+      html.push('<details><summary>' + escapeHtml(f.table.headers.join(' · ')) + '</summary><div class="scroller"><table class="data"><tr>' +
+        f.table.headers.map(function (h) { return '<th>' + escapeHtml(h) + '</th>'; }).join('') + '</tr>' +
+        f.table.rows.map(function (row) {
+          return '<tr>' + row.map(function (c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</table></div>' +
+        (f.table.note ? '<p class="note">' + escapeHtml(f.table.note) + '</p>' : '') + '</details>');
+    }
+    if (f.alternatives && f.alternatives.length) {
+      html.push('<p class="note"><strong>Alternatives:</strong> ' + f.alternatives.map(function (a) {
+        return escapeHtml(a.value) + ' <span style="opacity:.7">(' + escapeHtml(a.reason) + ')</span>';
+      }).join(' · ') + '</p>');
+    }
+    if (f.howTo) {
+      html.push('<details><summary>How to do it in Last.fm</summary><p class="note">' + escapeHtml(f.howTo) + '</p></details>');
+    }
+    html.push('<div class="decisions">' +
+      '<button class="button" data-action="accept" data-id="' + escapeHtml(f.id) + '"' +
+      (state === 'accept' ? ' disabled' : '') + '>✓ Accept</button>' +
+      '<button class="button" data-action="discard" data-id="' + escapeHtml(f.id) + '"' +
+      (state === 'discard' ? ' disabled' : '') + '>✗ Discard</button>' +
+      (state !== 'pending' ? '<button class="button" data-action="pending" data-id="' + escapeHtml(f.id) + '">↺ Back to pending</button>' : '') +
+      '<span class="state">' + (state === 'accept' ? 'marked to do' : state === 'discard' ? 'discarded (will not appear in the CSV)' : 'undecided') + '</span>' +
+      '</div>');
+    html.push('</article>');
+    return html.join('');
+  }
+
+  document.addEventListener('click', function (e) {
+    var button = e.target.closest('button[data-action]');
+    if (button) {
+      var id = button.dataset.id;
+      if (button.dataset.action === 'pending') delete decisions[id];
+      else decisions[id] = button.dataset.action;
+      saveDecisions();
+      var cardElement = document.getElementById('f-' + id);
+      var finding = null;
+      for (var i = 0; i < report.findings.length && !finding; i++) {
+        if (report.findings[i].id === id) finding = report.findings[i];
+      }
+      if (cardElement && finding) cardElement.outerHTML = card(finding);
+      return;
+    }
+    var row = e.target.closest('.compact-row[data-open]');
+    if (row && row.nextElementSibling) row.nextElementSibling.classList.toggle('hidden');
+  });
+
+  /* ---------------- start-up ---------------- */
+
+  if (report) {
+    dropzone.classList.add('hidden');
+    render(report);
+  }
+})();
+</script>
+</body>
+</html>

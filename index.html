@@ -1,0 +1,3180 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Last.fm Lens — scrobble cleanup magnifier</title>
+<style>
+  :root {
+    --page: #f6f7f9;
+    --panel: #ffffff;
+    --border: #e2e5ea;
+    --text: #14181f;
+    --muted: #5c6675;
+    --accent: #c2185b;
+    --accent-soft: #fce4ec;
+    --high: #0f7b4f;
+    --high-bg: #e3f6ec;
+    --medium: #a06400;
+    --medium-bg: #fdf1d8;
+    --low: #6b7280;
+    --low-bg: #eef0f3;
+    --alarm: #b3261e;
+    --alarm-bg: #fdecea;
+    --radius: 10px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #14161a;
+      --panel: #1c1f26;
+      --border: #2b303a;
+      --text: #e8eaee;
+      --muted: #9aa4b2;
+      --accent: #ff5c8a;
+      --accent-soft: #3a1c28;
+      --high: #5fd39a;
+      --high-bg: #16301f;
+      --medium: #f0b357;
+      --medium-bg: #33270f;
+      --low: #9aa4b2;
+      --low-bg: #24282f;
+      --alarm: #ff8a7a;
+      --alarm-bg: #3a1c18;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); }
+  header.masthead { padding: 28px 20px 18px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h1 span.lens { color: var(--accent); }
+  .tagline { color: var(--muted); margin: 0; font-size: 14px; }
+  main { max-width: 1100px; margin: 0 auto 80px; padding: 0 20px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  #dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 46px 20px;
+    text-align: center;
+    background: var(--panel);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+  #dropzone h2 { margin: 0 0 8px; font-size: 19px; }
+  #dropzone p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+  .note { color: var(--muted); font-size: 13px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .kpi b { display: block; font-size: 22px; letter-spacing: -0.02em; }
+  .kpi span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi.lead b { color: var(--accent); }
+  .toolbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--page) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    margin-bottom: 16px;
+  }
+  .toolbar .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  input[type=search], select {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit;
+  }
+  input[type=search] { min-width: 240px; flex: 1; }
+  .button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  .button:hover { border-color: var(--accent); color: var(--accent); }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .button.primary:hover { opacity: .9; color: #fff; }
+  section.group { margin-bottom: 26px; }
+  section.group > h2 { font-size: 18px; margin: 22px 0 10px; }
+  section.group > h2 .group-summary { font-weight: 400; color: var(--muted); font-size: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .card.discarded { opacity: .45; }
+  .card.accepted { border-color: var(--high); box-shadow: inset 3px 0 0 var(--high); }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .tag {
+    font-size: 11.5px; border-radius: 999px; padding: 3px 9px; border: 1px solid transparent;
+    text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+  }
+  .e-high { background: var(--high-bg); color: var(--high); }
+  .e-medium { background: var(--medium-bg); color: var(--medium); }
+  .e-low { background: var(--low-bg); color: var(--low); }
+  .e-info { background: var(--low-bg); color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .action-box {
+    font-family: var(--mono); font-size: 13px; background: var(--page);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .action-box .arrow { color: var(--muted); }
+  .action-box .new { color: var(--high); font-weight: 700; }
+  .action-box .old { color: var(--alarm); }
+  ul.signals { list-style: none; padding: 0; margin: 8px 0; }
+  ul.signals li { position: relative; padding-left: 16px; margin-bottom: 3px; font-size: 13.5px; }
+  ul.signals li::before {
+    content: ""; position: absolute; left: 3px; top: 8px; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--low);
+  }
+  ul.signals li.strong::before { background: var(--high); }
+  ul.signals li.alarm::before { background: var(--alarm); }
+  ul.signals li.note::before { background: var(--medium); }
+  ul.signals li.weak::before { background: var(--low); }
+  .explanation { margin: 8px 0; font-size: 14px; }
+  .warning {
+    background: var(--medium-bg); color: var(--medium); border-radius: 8px;
+    padding: 8px 10px; font-size: 13.5px; margin: 8px 0;
+  }
+  .alarm-box {
+    background: var(--alarm-bg); color: var(--alarm); border-radius: 8px;
+    padding: 8px 10px; font-size: 13.5px; margin: 8px 0; font-weight: 600;
+  }
+  table.data { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+  table.data th, table.data td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  table.data th { color: var(--muted); font-weight: 600; }
+  table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.canonical td { font-weight: 700; }
+  details { margin: 6px 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details[open] summary { margin-bottom: 6px; }
+  .scroller { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .decisions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .decisions .state { font-size: 12.5px; color: var(--muted); }
+  .compact-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13.5px; }
+  .compact-row:hover { background: var(--page); }
+  .compact-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .compact-row .i { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .compact-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .hidden { display: none !important; }
+  .help h3 { font-size: 15px; margin: 16px 0 4px; }
+  .help ul { margin: 4px 0; padding-left: 20px; }
+  .help li { font-size: 13.5px; margin-bottom: 3px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--page); padding: 1px 5px; border-radius: 4px; }
+  .errors { color: var(--alarm); font-size: 13.5px; }
+  .loading { text-align: center; padding: 30px; color: var(--muted); }
+  @media print {
+    .toolbar, .decisions, #dropzone, .button { display: none !important; }
+    body { background: #fff; }
+    .card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1>Last.fm <span class="lens">Lens</span></h1>
+  <p class="tagline">
+    A magnifier for tidying up scrobbles: duplicate artists, combined artist names, inconsistent track
+    titles, missing or clashing albums, duplicate scrobbles and long-tail oddities. <strong>It edits
+    nothing:</strong> it tells you what to look at, with the evidence in plain sight.
+  </p>
+</header>
+
+<main>
+  <div id="dropzone">
+    <h2>Drop your scrobble CSV here</h2>
+    <p>The one from <a href="https://lastfmstats.com" target="_blank" rel="noopener">lastfmstats.com</a>
+       (<code>lastfmstats-yourname.csv</code>) works, as does any CSV with artist, album, track and date columns.</p>
+    <p class="note">Everything is processed in your browser. The file is never uploaded anywhere.</p>
+    <input type="file" id="fileInput" accept=".csv,.txt,text/csv" class="hidden">
+  </div>
+
+  <div id="notices" class="panel hidden"></div>
+
+  <div id="results" class="hidden">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="toolbar">
+      <div class="row" id="typeChips"></div>
+      <div class="row" style="margin-top:8px">
+        <input type="search" id="search" placeholder="Search artist, track, album…">
+        <select id="sort">
+          <option value="confidence">Sort: confidence and impact</option>
+          <option value="impact">Sort: impact</option>
+          <option value="type">Sort: category</option>
+        </select>
+        <button class="button" id="actionableOnly" aria-pressed="false">Actionable only</button>
+        <button class="button" id="compact" aria-pressed="false">Compact view</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="button primary" id="downloadMarkdown">Download report.md</button>
+        <button class="button" id="downloadCsv">Download actions.csv</button>
+        <button class="button" id="downloadJson">Download JSON</button>
+        <button class="button" id="printButton">Print / PDF</button>
+        <span class="note" id="filterState"></span>
+      </div>
+    </div>
+
+    <div id="list"></div>
+
+    <div class="panel help">
+      <h2 style="font-size:17px;margin-top:0">How it works, and where its limits lie</h2>
+      <p class="note" style="margin-top:0">
+        Every finding is a <strong>scored suspicion from 0 to 100</strong>, with the clues that fired and the
+        concrete evidence. The engine proposes; you decide. Nothing in this report asserts that something is
+        definitely wrong.
+      </p>
+      <h3>It is all code</h3>
+      <p class="note" style="margin-top:0">
+        There is no language model and no external service in the analysis: only deterministic functions
+        (normalised keys, sets of tracks, counts and a bounded edit distance) in <code>src/engine.js</code>.
+        The same CSV always produces exactly the same report, and every rule can be read and changed.
+      </p>
+      <h3>Evidence rule</h3>
+      <ul>
+        <li><strong>Sharing a track is required.</strong> An artist duplicate is only proposed when the two
+            names share at least one track, or when the names are identical bar capitalisation, accents or
+            punctuation. Looking similar on its own (starting with “Franc…”, say) never generates a finding.</li>
+        <li>Weak pairs are omitted and counted in the summary, so you always know what was left out. They can be
+            brought back with <code>minimumConfidence: 'low'</code>. Findings folded into a stronger one are
+            counted in the summary too, so nothing disappears quietly.</li>
+      </ul>
+      <h3>What each section looks at</h3>
+      <ul>
+        <li><strong>Duplicate artists:</strong> two names pointing at the same artist. The strong proof is
+            sharing tracks: if every track under “Ana” also sits under “Ana Beltrán”, it is almost certainly
+            the same entry. It also counts whether their scrobbles mix within the same sitting (less than ten
+            minutes apart).</li>
+        <li><strong>Combined artists:</strong> names such as “Ana, Bruno Salas y Cata”. These are flagged
+            only when the <strong>first</strong> artist of the name exists separately in your library, and the
+            proposal is exactly that first one (“Ana”). If the first one does not exist, the first that does is
+            used, with a warning that it may not be the main artist.
+            The same name written without the separator (“Ana Bruno”) is swept into the same finding, because it
+            is the same artist spelled differently.</li>
+        <li><strong>Duplicates never merge into a combined name.</strong> If the most frequent form of a pair is
+            itself a combined name, nothing is merged into it: everything is renamed straight to the artist it
+            stands for. That is why “Ana Bruno” points at “Ana” and never at “Ana, Bruno”, and why a name already
+            covered by a combined-name finding produces only one card rather than two saying the same thing.</li>
+        <li><strong>Inconsistent track titles:</strong> the same track written in several ways under the same
+            artist (capitalisation, “(X)” versus “- X”, with or without a <code>feat.</code> credit).</li>
+        <li><strong>Albums:</strong> albums missing on some scrobbles but present on others, the same title split
+            across several albums (single versus album), and albums spelled in several ways.</li>
+        <li><strong>Duplicate scrobbles:</strong> the same track twice in a row less than a minute apart.</li>
+        <li><strong>Long tail:</strong> artists with one or two scrobbles, likely typos, garbled characters or
+            odd spacing.</li>
+      </ul>
+      <h3>What it does NOT do</h3>
+      <ul>
+        <li>It does not edit your CSV and it does not touch your Last.fm account.</li>
+        <li>It does not decide for you: where two readings are possible, the finding says so explicitly.</li>
+        <li>It does not know any artist’s real discography. “They share 15 tracks” is very good evidence, but it
+            is still an inference from your own data.</li>
+      </ul>
+      <h3>The “good” value when there are two candidates</h3>
+      <ul>
+        <li>By default the proposal is the name that <strong>combines being the most recent, the most frequent
+            and the most complete</strong>, and the card shows all three so you can disagree with it. If one of
+            the three points the other way, a warning appears.</li>
+        <li>The rule can be changed in <code>src/engine.js</code> (<code>RULES.canonical</code>:
+            <code>recent</code>, <code>frequent</code> or <code>score</code>).</li>
+      </ul>
+      <h3>Making the changes in Last.fm</h3>
+      <ul>
+        <li>Edits to artist, track and album are <strong>retroactive</strong>: when you edit one scrobble,
+            Last.fm offers to apply it to every scrobble of that combination (and renaming an artist affects the
+            whole entry). It is a bulk change: look twice.</li>
+        <li>Deleting a duplicate scrobble is one at a time, from the scrobble’s (⋯) menu.</li>
+        <li>Mark items “Accept” or “Discard” here and the actions CSV downloads with your decisions applied.</li>
+      </ul>
+      <h3>Privacy</h3>
+      <ul>
+        <li>The analysis runs entirely in your browser. No server, no upload, no network requests.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div id="loading" class="loading hidden">Analysing…</div>
+</main>
+
+<script>/*!
+ * Last.fm Lens — scrobble cleanup analysis engine
+ * ----------------------------------------------------------------------------
+ * Reads a CSV of scrobbles (lastfmstats.com format or similar) and reports what
+ * is probably worth tidying up in Last.fm: duplicate artists, combined artist
+ * names, inconsistent track titles, missing or clashing albums, duplicate
+ * scrobbles and long-tail oddities.
+ *
+ * Design principle: the engine PROPOSES, it never asserts. Every finding carries
+ *   - points (0-100): how strongly it looks like the same item / a mistake
+ *   - signals: the specific clues that fired, in plain English
+ *   - impact: how many scrobbles would change if you accept the proposal
+ *   - evidence: the tracks and counts behind the suspicion
+ *
+ * It edits nothing. It only informs.
+ *
+ * No models, no network, no dependencies: plain deterministic functions, so the
+ * same CSV always produces exactly the same report.
+ *
+ * Runs in Node (`require('./engine.js')`) and in the browser
+ * (`window.LastfmLens`).
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.LastfmLens = factory();
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var VERSION = '1.1.0';
+
+  /* ==========================================================================
+   * 1. Configurable rules
+   * ========================================================================== */
+
+  var RULES = {
+    // How to pick the "good" (canonical) value out of a group of variants:
+    //   'score'    = recency + frequency + most complete name (default)
+    //   'recent'   = whichever has the most recent scrobble wins
+    //   'frequent' = whichever has the most scrobbles wins
+    canonical: 'score',
+
+    // Confidence thresholds, on the 0-100 points scale
+    highThreshold: 60,
+    mediumThreshold: 40,
+    // Findings below this are not listed (they are counted in the summary).
+    // 'high' gives the smallest report; 'low' includes everything.
+    minimumConfidence: 'medium',
+
+    // Minimum evidence: an artist duplicate is only proposed if the two names
+    // share at least one track, unless the names are identical bar formatting.
+    requireSharedTrack: true,
+
+    // Duplicates: two scrobbles of the same artist+track closer than this
+    duplicateWindowMs: 60 * 1000,
+    duplicateCertainWindowMs: 15 * 1000,
+
+    // Session mixing: a scrobble of A and one of B closer than this = same sitting
+    sessionWindowMs: 10 * 60 * 1000,
+
+    // Fewest affected scrobbles before an album clash is worth listing
+    minAlbumImpact: 3,
+
+    // Long tail
+    maxScrobblesForRareArtist: 2, // a "rare artist" has <= this many scrobbles
+    minScrobblesForTypoCompare: 20, // only compare against artists with >= this
+    maxTypoDistance: 2, // edit distance before suspecting a typo
+
+    // Presentation
+    maxEvidence: 14, // most evidence items per finding
+    maxTableRows: 400
+  };
+
+  var TYPE_LABELS = {
+    duplicate_artists: 'Duplicate artists',
+    combined_artists: 'Combined artists',
+    title_variants: 'Inconsistent track titles',
+    artist_in_title: 'Artist repeated in title',
+    albums: 'Albums',
+    duplicate_scrobbles: 'Duplicate scrobbles',
+    long_tail: 'Long tail and oddities'
+  };
+
+  var TYPE_ORDER = [
+    'duplicate_artists',
+    'combined_artists',
+    'title_variants',
+    'artist_in_title',
+    'albums',
+    'duplicate_scrobbles',
+    'long_tail'
+  ];
+
+  var ACTIONS = {
+    rename_artist: {
+      label: 'Rename artist',
+      how: function (f) {
+        return (
+          'In Last.fm open one of the scrobbles of “' + f.current + '”, edit the Artist field and ' +
+          'type “' + f.proposed + '”. Last.fm will offer to apply the change to all ' +
+          num(f.impact) + ' scrobbles. It is retroactive and cannot be undone: check it first.'
+        );
+      }
+    },
+    split_combined: {
+      label: 'Review combined artist',
+      how: function (f) {
+        return (
+          'Those ' + num(f.impact) + ' scrobbles sit under a name that joins several artists. If “' +
+          f.current + '” is not the right name (a real duo, say), leave it alone. If it is, edit the ' +
+          'Artist field to “' + f.proposed + '” and, if you want to keep the featuring credit, add it ' +
+          'to the track title in brackets.'
+        );
+      }
+    },
+    rename_track: {
+      label: 'Merge track title',
+      how: function (f) {
+        return (
+          'In Last.fm, edit the Track field of a scrobble with “' + f.current + '” and set it to “' +
+          f.proposed + '”. The change applies to the ' + num(f.impact) +
+          ' scrobbles of that artist+track combination.'
+        );
+      }
+    },
+    strip_artist_from_title: {
+      label: 'Remove artist from title',
+      how: function (f) {
+        return (
+          'The scrobble already has the artist in its Artist field and the title repeats it. ' +
+          'Edit the Track field to “' + f.proposed + '”.'
+        );
+      }
+    },
+    fill_album: {
+      label: 'Fill in album',
+      how: function (f) {
+        return (
+          num(f.impact) + ' scrobbles of “' + f.current + '” have no album while others of the same ' +
+          'track do. Edit the Album field to “' + f.proposed + '”.'
+        );
+      }
+    },
+    merge_album: {
+      label: 'Merge album name',
+      how: function (f) {
+        return (
+          'The same album is spelled in several ways (' + num(f.impact) + ' scrobbles). Edit the Album ' +
+          'field to whichever form you prefer; the most used one is usually the right one.'
+        );
+      }
+    },
+    review_album: {
+      label: 'Review album',
+      how: function (f) {
+        return (
+          'The same title appears across ' + num(f.impact) + ' scrobbles split between these albums. ' +
+          'If one is the single and the other is the album, that is correct and there is nothing to fix.'
+        );
+      }
+    },
+    delete_duplicate: {
+      label: 'Delete duplicate',
+      how: function (f) {
+        return (
+          'This looks like a scrobble repeated by accident. In Last.fm open the scrobble and use the ' +
+          'menu (⋯) to delete it. There is no bulk edit here: it is one at a time.'
+        );
+      }
+    },
+    review: {
+      label: 'Review',
+      how: function () {
+        return 'No automatic action: this one needs your judgement.';
+      }
+    }
+  };
+
+  /* ==========================================================================
+   * 2. Text, number and date helpers
+   * ========================================================================== */
+
+  var RE_SPACES = /\s+/g;
+  var RE_NON_ALPHANUMERIC = /[^\p{L}\p{N}]+/gu;
+
+  /** Strips accents and diacritics without destroying non-Latin scripts. */
+  function stripAccents(s) {
+    try {
+      return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    } catch (e) {
+      return s;
+    }
+  }
+
+  /** Unifies quotes, dashes and "exotic" spaces that would split equal keys. */
+  function normaliseText(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/[\u2018\u2019\u201B\u2032\u02BC`\u00B4]/g, "'")
+      .replace(/[\u201C\u201D\u2033\u00AB\u00BB]/g, '"')
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-')
+      .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+      .replace(/[\u200B-\u200F\u2028\u2029\uFEFF\uFFFD]/g, '')
+      .replace(RE_SPACES, ' ')
+      .trim();
+  }
+
+  /** Comparison key: no accents, lower case, no punctuation. */
+  function key(s) {
+    var h = stripAccents(normaliseText(s)).toLowerCase();
+    h = h.replace(RE_NON_ALPHANUMERIC, ' ').replace(RE_SPACES, ' ').trim();
+    return h;
+  }
+
+  var RE_FEAT = /\b(feat|featuring|ft|con)\b\.?/g;
+  function stripFeat(s) {
+    return s.replace(RE_FEAT, ' ').replace(RE_SPACES, ' ').trim();
+  }
+
+  /** Splits "Track (X) - Y" into a base plus its qualifiers. */
+  function titleParts(t) {
+    var h = normaliseText(t);
+    var qualifiers = [];
+    var base = h.replace(/[\(\[\{]([^\)\]\}]*)[\)\]\}]/g, function (match, inner) {
+      var q = key(inner);
+      if (q) qualifiers.push(q);
+      return ' ';
+    });
+    var m;
+    var guard = 0;
+    while (guard++ < 5) {
+      m = base.match(/\s+-\s+(.{2,})$/);
+      if (!m) break;
+      var q2 = key(m[1]);
+      if (!q2) break;
+      qualifiers.push(q2);
+      base = base.slice(0, m.index);
+    }
+    return { base: base.replace(RE_SPACES, ' ').trim(), qualifiers: qualifiers.filter(Boolean) };
+  }
+
+  /** Strict title key: formatting only. */
+  function strictTitleKey(t) {
+    return key(t);
+  }
+
+  /** Loose title key: also drops the featuring credit and any qualifiers. */
+  function looseTitleKey(t) {
+    return key(stripFeat(titleParts(t).base)) || key(t);
+  }
+
+  /** Words that point to a DIFFERENT recording, not just different formatting. */
+  var RE_DIFFERENT_VERSION = new RegExp(
+    '\\b(live|en vivo|directo|acoustic|acustico|acustica|remix|remaster|remastered|' +
+      'remasterizado|instrumental|karaoke|cover|version|edicion|edit|extended|reprise|' +
+      'demo|mono|stereo|radio edit|soundtrack|banda sonora|orchestral|orquesta|' +
+      'esc version|eurovision|junior|dancebreak|spanglish|spanish|english|italiano)\\b'
+  );
+
+  function qualifiersOf(t) {
+    return titleParts(t).qualifiers.join(' | ');
+  }
+
+  /** Artist key: no featuring credit, no brackets, no leading article. */
+  function artistKey(a) {
+    var h = normaliseText(a);
+    h = h.replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, ' ');
+    h = stripFeat(h);
+    var k = key(h);
+    k = k.replace(/^(the|los|las|el|la|le|les|il|lo)\s+/, '');
+    return k || key(a);
+  }
+
+  // Separators that really do join several artists. "and" and "x" are left out
+  // on purpose: they split genuine names ("Nina and the Wild").
+  var COMBINED_SEPARATORS = /,|;|\s+&\s+|\s+y\s+|\s+vs\.?\s+|\s+feat\.?\s+|\s+featuring\s+|\s+with\s+|\s+\|\s+/gi;
+
+  /** Splits an artist string that joins several artists. [] if it looks single. */
+  function splitArtist(a) {
+    var parts = normaliseText(a)
+      .split(COMBINED_SEPARATORS)
+      .map(function (p) {
+        return p.replace(/^[\s\-]+|[\s\-]+$/g, '').replace(/^[\(\[\{]|[\)\]\}]$/g, '').trim();
+      })
+      .filter(function (p) {
+        return key(p).length > 0;
+      });
+    return parts.length > 1 ? parts : [];
+  }
+
+  function num(n) {
+    try {
+      return Number(n).toLocaleString('en-GB');
+    } catch (e) {
+      return String(n);
+    }
+  }
+
+  function pct(x) {
+    return Math.round(x * 100) + '%';
+  }
+
+  var DATE_FORMAT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  var DATE_TIME_FORMAT = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  function shortDate(ms) {
+    if (ms == null || !isFinite(ms)) return '—';
+    return DATE_FORMAT.format(new Date(ms));
+  }
+  function dateTime(ms) {
+    if (ms == null || !isFinite(ms)) return '—';
+    return DATE_TIME_FORMAT.format(new Date(ms));
+  }
+  function humanDuration(ms) {
+    if (ms == null || !isFinite(ms)) return '—';
+    var s = Math.round(ms / 1000);
+    if (s < 60) return s + ' sec';
+    var m = s / 60;
+    if (m < 60) return (m < 10 ? m.toFixed(1) : Math.round(m)) + ' min';
+    var h = m / 60;
+    if (h < 24) return (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h';
+    var d = h / 24;
+    if (d < 60) return (d < 10 ? d.toFixed(1) : Math.round(d)) + ' days';
+    return Math.round(d / 30.44) + ' months';
+  }
+
+  /** Bounded Levenshtein distance (returns max+1 once it is exceeded). */
+  function editDistance(a, b, max) {
+    if (a === b) return 0;
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    var row = new Array(b.length + 1);
+    for (var j = 0; j <= b.length; j++) row[j] = j;
+    for (var i = 1; i <= a.length; i++) {
+      var previous = row[0];
+      row[0] = i;
+      var best = row[0];
+      for (var k = 1; k <= b.length; k++) {
+        var temp = row[k];
+        var cost = a.charCodeAt(i - 1) === b.charCodeAt(k - 1) ? 0 : 1;
+        row[k] = Math.min(row[k] + 1, row[k - 1] + 1, previous + cost);
+        if (row[k] < best) best = row[k];
+        previous = temp;
+      }
+      if (best > max) return max + 1;
+    }
+    return row[b.length];
+  }
+
+  /* ==========================================================================
+   * 3. Reading the CSV
+   * ========================================================================== */
+
+  /**
+   * Full CSV parser: configurable delimiter, double quotes, escaped quotes ("")
+   * and line breaks inside a quoted field.
+   */
+  function parseCSV(text, delimiter) {
+    delimiter = delimiter || ',';
+    var rows = [];
+    var row = [];
+    var field = '';
+    var i = 0;
+    var n = text.length;
+    var inQuotes = false;
+    while (i < n) {
+      var c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i++;
+          continue;
+        }
+        field += c;
+        i++;
+        continue;
+      }
+      if (c === '"') {
+        inQuotes = true;
+        i++;
+        continue;
+      }
+      if (c === '\r') {
+        i++;
+        continue;
+      }
+      if (c === '\n') {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = '';
+        i++;
+        continue;
+      }
+      if (c === delimiter) {
+        row.push(field);
+        field = '';
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+    }
+    if (field !== '' || row.length) {
+      row.push(field);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function detectDelimiter(text) {
+    var sample = text.slice(0, 20000).split('\n').slice(0, 20).join('\n');
+    var candidates = [';', ',', '\t', '|'];
+    var best = ';';
+    var bestCount = -1;
+    for (var i = 0; i < candidates.length; i++) {
+      var d = candidates[i];
+      var count = 0;
+      var inQuotes = false;
+      for (var j = 0; j < sample.length; j++) {
+        var c = sample[j];
+        if (c === '"') inQuotes = !inQuotes;
+        else if (c === d && !inQuotes) count++;
+      }
+      if (count > bestCount) {
+        bestCount = count;
+        best = d;
+      }
+    }
+    return best;
+  }
+
+  function looksLikeTimestamp(v) {
+    var s = String(v).trim();
+    if (!/^\d{9,14}$/.test(s)) return false;
+    var n = Number(s);
+    return n > 100000000 && n < 4102444800000;
+  }
+
+  function looksLikeISODate(v) {
+    return /^\d{4}-\d{2}-\d{2}([ T]|$)/.test(String(v).trim());
+  }
+
+  /** epoch (seconds or milliseconds) or ISO date → milliseconds. */
+  function parseDate(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return NaN;
+    if (/^\d{9,14}$/.test(s)) {
+      var n = Number(s);
+      return n < 1e11 ? n * 1000 : n; // below 1e11 means seconds
+    }
+    if (looksLikeISODate(s)) {
+      var t = Date.parse(s.replace(' ', 'T'));
+      return isNaN(t) ? NaN : t;
+    }
+    var t2 = Date.parse(s);
+    return isNaN(t2) ? NaN : t2;
+  }
+
+  function guessColumns(headers, rows) {
+    var col = { artist: -1, album: -1, albumId: -1, track: -1, date: -1 };
+    var normalised = headers.map(function (h) {
+      return key(h);
+    });
+    var used = {};
+    // Header aliases are kept in several languages on purpose: this part reads
+    // whatever the export happens to be, it is not part of the report wording.
+    function find(re, exclude) {
+      for (var i = 0; i < normalised.length; i++) {
+        if (used[i]) continue;
+        if (exclude && exclude.test(normalised[i])) continue;
+        if (re.test(normalised[i])) return i;
+      }
+      return -1;
+    }
+    col.albumId = find(/album.*(id|mbid|identificador)/);
+    if (col.albumId >= 0) used[col.albumId] = true;
+    col.artist = find(/^(artist|artista|artist name|nombre del artista)$/);
+    if (col.artist < 0) col.artist = find(/^(artist|artista)/, /album/);
+    if (col.artist < 0) col.artist = find(/artist/, /album/);
+    if (col.artist >= 0) used[col.artist] = true;
+    col.album = find(/album/, /album.*(id|mbid|artist)/);
+    if (col.album >= 0) used[col.album] = true;
+    col.track = find(/^(track|track name|title|titulo|song|name|nombre)$/);
+    if (col.track < 0) col.track = find(/track|title|song|titulo|canci/);
+    if (col.track >= 0) used[col.track] = true;
+    col.date = find(/^(date|fecha|uts|timestamp|played at|played_at|time)$/);
+    if (col.date < 0) col.date = find(/date|fecha|uts|timestamp|time|when/);
+
+    // Content check: the date column has to look like dates
+    var sampleRows = rows.slice(0, 30);
+    var validCount = function (index) {
+      if (index < 0) return 0;
+      var ok = 0;
+      for (var i = 0; i < sampleRows.length; i++) {
+        if (looksLikeTimestamp(sampleRows[i][index]) || looksLikeISODate(sampleRows[i][index])) ok++;
+      }
+      return ok;
+    };
+    if (col.date < 0 || validCount(col.date) < sampleRows.length / 2) {
+      for (var c = 0; c < headers.length; c++) {
+        if (validCount(c) >= sampleRows.length / 2 && c !== col.artist && c !== col.track && c !== col.album) {
+          col.date = c;
+          break;
+        }
+      }
+    }
+    return col;
+  }
+
+  /**
+   * Reads a CSV of scrobbles.
+   * @returns {{scrobbles: Array, headers: string[], columns: Object, warnings: string[]}}
+   */
+  function readCSV(text, fileName) {
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    var delimiter = detectDelimiter(text);
+    var rows = parseCSV(text, delimiter);
+    var warnings = [];
+    if (!rows.length) return { scrobbles: [], headers: [], columns: {}, warnings: ['The file is empty.'] };
+
+    var headers = rows[0].map(function (h) {
+      return normaliseText(h);
+    });
+    var body = rows.slice(1);
+
+    // Is the first row a header or data?
+    var hasHeader = !looksLikeTimestamp(headers[headers.length - 1]) && body.length > 0;
+    var columns = guessColumns(headers, body);
+    if (!hasHeader) {
+      columns = { artist: 0, album: 1, albumId: -1, track: 3, date: 4 };
+      body = rows;
+      headers = ['(no header)'];
+      if (body[0] && body[0].length > 4 && !looksLikeTimestamp(body[0][4])) {
+        columns = { artist: 0, album: 1, albumId: -1, track: 2, date: 3 };
+      }
+    }
+
+    if (columns.artist < 0 || columns.track < 0) {
+      warnings.push(
+        'I could not identify the artist and track columns. Assuming the usual order ' +
+          '(Artist;Album;AlbumId;Track;Date).'
+      );
+      columns = { artist: 0, album: 1, albumId: 2, track: 3, date: 4 };
+    }
+    if (columns.date < 0) {
+      warnings.push('No date column found: time-based checks are switched off.');
+    }
+
+    var fieldAt = function (row, index) {
+      if (index < 0 || !row) return '';
+      var v = row[index];
+      return v == null ? '' : normaliseText(v);
+    };
+
+    var scrobbles = [];
+    var withoutDate = 0;
+    for (var i = 0; i < body.length; i++) {
+      var row2 = body[i];
+      if (!row2 || (row2.length === 1 && row2[0] === '')) continue;
+      var ts = columns.date >= 0 ? parseDate(row2[columns.date]) : NaN;
+      if (isNaN(ts)) withoutDate++;
+      scrobbles.push({
+        i: scrobbles.length,
+        artist: fieldAt(row2, columns.artist),
+        album: fieldAt(row2, columns.album),
+        albumId: fieldAt(row2, columns.albumId),
+        title: fieldAt(row2, columns.track),
+        ts: ts,
+        source: fileName || ''
+      });
+    }
+    if (withoutDate) warnings.push(num(withoutDate) + ' rows have no recognisable date.');
+    scrobbles.sort(function (a, b) {
+      var av = isNaN(a.ts) ? Infinity : a.ts;
+      var bv = isNaN(b.ts) ? Infinity : b.ts;
+      return av - bv;
+    });
+    scrobbles.forEach(function (s, index) {
+      s.i = index;
+    });
+    return { scrobbles: scrobbles, headers: headers, columns: columns, warnings: warnings };
+  }
+
+  /* ==========================================================================
+   * 4. Index
+   * ========================================================================== */
+
+  function buildIndex(scrobbles) {
+    var artists = new Map(); // name -> {name, n, key, tracks: Map, timestamps: [], first, last, parts}
+    var albumNames = new Map(); // album key -> Map(raw spelling -> n)
+
+    for (var i = 0; i < scrobbles.length; i++) {
+      var s = scrobbles[i];
+      if (!s.artist && !s.title) continue;
+      var artist = artists.get(s.artist);
+      if (!artist) {
+        artist = {
+          name: s.artist,
+          n: 0,
+          key: artistKey(s.artist),
+          tracks: new Map(),
+          timestamps: [],
+          first: NaN,
+          last: NaN,
+          parts: splitArtist(s.artist)
+        };
+        artists.set(s.artist, artist);
+      }
+      artist.n++;
+      if (!isNaN(s.ts)) {
+        artist.timestamps.push(s.ts);
+        if (isNaN(artist.first) || s.ts < artist.first) artist.first = s.ts;
+        if (isNaN(artist.last) || s.ts > artist.last) artist.last = s.ts;
+      }
+      var trackKey = s.__key != null ? s.__key : (s.__key = looseTitleKey(s.title));
+      var track = artist.tracks.get(trackKey);
+      if (!track) {
+        track = { key: trackKey, titles: new Map(), n: 0, albums: new Map() };
+        artist.tracks.set(trackKey, track);
+      }
+      track.n++;
+      track.titles.set(s.title, (track.titles.get(s.title) || 0) + 1);
+      if (s.album) track.albums.set(s.album, (track.albums.get(s.album) || 0) + 1);
+
+      if (s.album) {
+        var albumKey = key(s.album);
+        var spellings = albumNames.get(albumKey);
+        if (!spellings) {
+          spellings = new Map();
+          albumNames.set(albumKey, spellings);
+        }
+        spellings.set(s.album, (spellings.get(s.album) || 0) + 1);
+      }
+    }
+    var list = Array.from(artists.values());
+    list.sort(function (x, y) {
+      return y.n - x.n || (x.name < y.name ? -1 : 1);
+    });
+    return { artists: artists, list: list, albumNames: albumNames };
+  }
+
+  /* ==========================================================================
+   * 5. Scoring and finding helpers
+   * ========================================================================== */
+
+  function confidence(points) {
+    if (points >= RULES.highThreshold) return 'high';
+    if (points >= RULES.mediumThreshold) return 'medium';
+    return 'low';
+  }
+
+  function findingId(type, current, proposed) {
+    return type + '|' + current + '|' + proposed;
+  }
+
+  /** Picks the canonical value of a group of variants, per RULES.canonical. */
+  function chooseCanonical(variants) {
+    var ordered = variants.slice().sort(function (a, b) {
+      if (RULES.canonical === 'recent') return (b.last || 0) - (a.last || 0);
+      if (RULES.canonical === 'frequent') return b.n - a.n;
+      return canonicalScore(b) - canonicalScore(a);
+    });
+    return ordered[0];
+  }
+
+  function canonicalScore(v) {
+    var p = 0;
+    if (v.last) p += 2; // recency: the user's rule, weighted highest
+    p += Math.min(1, Math.log10(1 + v.n) / 2) * 1.5; // frequency
+    p += Math.min(1, (v.value || '').length / 24) * 0.5; // more complete name
+    p += v.extra && v.extra.mostRecent ? 0.6 : 0;
+    return p;
+  }
+
+  function signal(text, level) {
+    return { text: text, level: level || 'info' };
+  }
+
+  function newFinding(options) {
+    var f = {
+      id: findingId(options.type + ':' + (options.subtype || ''), options.current || '', options.proposed || ''),
+      type: options.type,
+      typeLabel: TYPE_LABELS[options.type] || options.type,
+      subtype: options.subtype || '',
+      title: options.title,
+      points: Math.max(0, Math.min(100, Math.round(options.points))),
+      impact: options.impact || 0,
+      action: options.action,
+      actionLabel: (ACTIONS[options.action] || {}).label || options.action,
+      current: options.current || '',
+      proposed: options.proposed || '',
+      alternatives: options.alternatives || [],
+      signals: options.signals || [],
+      explanation: options.explanation || '',
+      evidence: options.evidence || null,
+      table: options.table || null,
+      warning: options.warning || '',
+      informational: !!options.informational
+    };
+    f.confidence = confidence(f.points);
+    var action = ACTIONS[f.action];
+    f.howTo = action ? action.how(f) : '';
+    return f;
+  }
+
+  /* ==========================================================================
+   * 6. Detectors
+   * ========================================================================== */
+
+  /* --- 6.1 Duplicate artists ------------------------------------------------- */
+
+  function detectMergePairs(index) {
+    var candidates = [];
+    var list = index.list;
+    var seen = new Set();
+
+    function addPair(a, b, relation) {
+      var shorter = a.key.length <= b.key.length ? a : b;
+      var longer = shorter === a ? b : a;
+      if (shorter.n < 1) return;
+      var shared = 0;
+      shorter.tracks.forEach(function (track, k) {
+        if (longer.tracks.has(k)) shared++;
+      });
+      // One strict rule: either they share a track, or the names are identical
+      // bar formatting. A name that merely looks similar never qualifies.
+      if (RULES.requireSharedTrack && relation !== 'identical' && shared === 0) return;
+      var minTracks = Math.min(shorter.tracks.size, longer.tracks.size) || 1;
+      // The entry with FEWER TRACKS is the one fully covered by the other, which is
+      // not always the one with the shorter name: “Ana” is shorter than
+      // “Ana Bruno” yet has 90 tracks against its 1, so naming the shorter one
+      // there produced sentences that were simply untrue.
+      var fewer = shorter.tracks.size <= longer.tracks.size ? shorter : longer;
+      var more = fewer === shorter ? longer : shorter;
+      var mixing = countTemporalMix(shorter.timestamps, longer.timestamps);
+      var signals = [];
+      var points = 0;
+
+      var coverage = (shared + 0.5) / (minTracks + 1);
+      points += 40 * coverage;
+      points += 15 * (Math.min(shared, 20) / 20);
+      points += relation === 'identical' ? 20 : 15;
+      points += 15 * (Math.min(mixing, 10) / 10);
+      points += 10 * (Math.min(minTracks, 8) / 8);
+
+      if (relation === 'identical') {
+        signals.push(signal('The two names are identical bar capitalisation, accents or punctuation', 'strong'));
+      } else {
+        signals.push(signal('One name contains the other word for word', 'strong'));
+      }
+      signals.push(
+        signal(
+          'They share ' + num(shared) + ' track(s) out of ' + num(minTracks) + ' possible (' +
+            pct(shared / minTracks) + ')',
+          'strong'
+        )
+      );
+      if (shared === minTracks && shared > 0) {
+        signals.push(
+          signal(
+            'EVERY track under “' + fewer.name + '” also appears under “' + more.name + '”',
+            'alarm'
+          )
+        );
+      }
+      if (mixing > 0) {
+        signals.push(
+          signal(
+            mixing + ' scrobble(s) of one fall within 10 minutes of scrobbles of the other (same sitting)',
+            'strong'
+          )
+        );
+      }
+      if (minTracks < 3) {
+        signals.push(
+          signal(
+            'Small sample: “' + fewer.name + '” only has ' + num(minTracks) + ' different track(s)',
+            'note'
+          )
+        );
+      }
+      var overlap = overlapWindow(shorter, longer);
+      if (overlap) signals.push(signal('Their dates overlap: ' + overlap, 'medium'));
+
+      candidates.push({
+        type: 'duplicate_artists',
+        __a: shorter.name,
+        __b: longer.name,
+        coverage: minTracks ? shared / minTracks : 0,
+        relation: relation,
+        shared: shared,
+        minTracks: minTracks,
+        points: points,
+        signals: signals,
+        mixing: mixing,
+        evidence: { title: 'Tracks present under more than one form', items: sharedTrackEvidence(shorter, longer) }
+      });
+    }
+
+    // (a) the same normalised name
+    var byKey = new Map();
+    list.forEach(function (a) {
+      if (!a.key) return;
+      var group = byKey.get(a.key);
+      if (!group) {
+        group = [];
+        byKey.set(a.key, group);
+      }
+      group.push(a);
+    });
+    byKey.forEach(function (group) {
+      for (var x = 0; x < group.length; x++) {
+        for (var y = x + 1; y < group.length; y++) {
+          if (group[x].name !== group[y].name) addPair(group[x], group[y], 'identical');
+        }
+      }
+    });
+
+    // (b) containment, word for word. Artists are indexed by each word of their
+    // name so that only pairs that could match are compared, instead of every
+    // pair against every other pair (unworkable with thousands of artists).
+    var eligible = list.filter(function (a) {
+      return a.key && !(a.parts && a.parts.length > 1);
+    });
+    var byWord = new Map();
+    function indexInto(map, k, value) {
+      var group = map.get(k);
+      if (!group) {
+        group = [];
+        map.set(k, group);
+      }
+      group.push(value);
+    }
+    function wordsOf(k) {
+      return k.split(' ').filter(function (w) {
+        return w.length >= 2;
+      });
+    }
+    eligible.forEach(function (b) {
+      wordsOf(b.key).forEach(function (w) {
+        indexInto(byWord, w, b);
+      });
+    });
+    eligible.forEach(function (a) {
+      var candidates2 = new Set();
+      wordsOf(a.key).forEach(function (w) {
+        (byWord.get(w) || []).forEach(function (b) {
+          if (b !== a) candidates2.add(b);
+        });
+      });
+      candidates2.forEach(function (b) {
+        if (!b.key || a.key === b.key) return; // exact equality is covered in (a)
+        // Containment only. The old "starts the same" rule produced nonsense
+        // such as “Clara Bell” ~ “Claudia Belmonte”.
+        if (!containsWord(b.key, a.key) && !containsWord(a.key, b.key)) return;
+        var pairKey = a.name < b.name ? a.name + '\u0000' + b.name : b.name + '\u0000' + a.name;
+        if (seen.has(pairKey)) return;
+        seen.add(pairKey);
+        addPair(a, b, 'containment');
+      });
+    });
+    return candidates;
+  }
+
+  function containsWord(haystack, needle) {
+    if (!needle || needle === haystack) return false;
+    if (haystack.length <= needle.length) return false;
+    var at = haystack.indexOf(needle);
+    while (at >= 0) {
+      var startsWord = at === 0 || haystack[at - 1] === ' ';
+      var endsWord = at + needle.length === haystack.length || haystack[at + needle.length] === ' ';
+      if (startsWord && endsWord) return true;
+      at = haystack.indexOf(needle, at + 1);
+    }
+    return false;
+  }
+
+  /** Scrobbles of one artist that have a scrobble of the other within the session window. */
+  function countTemporalMix(timestampsA, timestampsB) {
+    if (!timestampsA.length || !timestampsB.length) return 0;
+    var a = timestampsA.length <= timestampsB.length ? timestampsA : timestampsB;
+    var b = a === timestampsA ? timestampsB : timestampsA;
+    var count = 0;
+    var j = 0;
+    for (var i = 0; i < a.length; i++) {
+      var t = a[i];
+      while (j < b.length && b[j] < t - RULES.sessionWindowMs) j++;
+      if (j < b.length && Math.abs(b[j] - t) <= RULES.sessionWindowMs) count++;
+    }
+    return count;
+  }
+
+  function overlapWindow(a, b) {
+    if (isNaN(a.first) || isNaN(b.first)) return '';
+    var start = Math.max(a.first, b.first);
+    var end = Math.min(a.last, b.last);
+    if (end <= start) return '';
+    return 'both have scrobbles between ' + shortDate(start) + ' and ' + shortDate(end);
+  }
+
+  function sharedTrackEvidence(shorter, longer) {
+    var items = [];
+    shorter.tracks.forEach(function (track, k) {
+      var other = longer.tracks.get(k);
+      if (other) {
+        items.push({
+          a: mostFrequent(track.titles),
+          b: num(track.n) + ' + ' + num(other.n) + ' scrobbles',
+          n: track.n + other.n
+        });
+      }
+    });
+    items.sort(function (x, y) {
+      return y.n - x.n;
+    });
+    return items;
+  }
+
+  function mostFrequent(map) {
+    var best = null;
+    var max = -1;
+    map.forEach(function (v, k) {
+      if (v > max) {
+        max = v;
+        best = k;
+      }
+    });
+    return best;
+  }
+
+  function variantOf(name, data) {
+    return {
+      value: name,
+      n: data.n,
+      first: data.first,
+      last: data.last,
+      extra: { mostRecent: false }
+    };
+  }
+
+  /** A pair is only grouped with another one when the evidence is genuinely good. */
+  function isStrongUnion(pair) {
+    if (pair.relation === 'identical') return true;
+    if (pair.relation !== 'containment') return false;
+    return pair.shared >= 1 && pair.coverage >= 0.6 && pair.minTracks >= 2;
+  }
+
+  /**
+   * Turns suspicious artist pairs into findings. Strong pairs are grouped into
+   * connected components, so several names of the same artist become one finding.
+   */
+  function buildMergeFindings(pairs, index) {
+    if (!pairs.length) return [];
+    var parent = Object.create(null);
+    function root(x) {
+      if (parent[x] == null) parent[x] = x;
+      while (parent[x] !== x) {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+      }
+      return x;
+    }
+    function join(a, b) {
+      var ra = root(a);
+      var rb = root(b);
+      if (ra !== rb) parent[rb] = ra;
+    }
+    pairs.forEach(function (pair) {
+      root(pair.__a);
+      root(pair.__b);
+      if (isStrongUnion(pair)) join(pair.__a, pair.__b);
+    });
+
+    var components = new Map();
+    pairs.forEach(function (pair) {
+      var r = root(pair.__a);
+      var group = components.get(r);
+      if (!group) {
+        group = { pairs: [], names: new Set() };
+        components.set(r, group);
+      }
+      group.pairs.push(pair);
+      group.names.add(pair.__a);
+      group.names.add(pair.__b);
+    });
+
+    var findings = [];
+    var namesInGroups = new Set();
+    var groups = [];
+    components.forEach(function (group) {
+      var strongPairs = group.pairs.filter(isStrongUnion);
+      var names = Array.from(group.names);
+      if (strongPairs.length > 1 && names.length > 1) {
+        groups.push({ names: names, pairs: group.pairs });
+        names.forEach(function (name) {
+          namesInGroups.add(name);
+        });
+      }
+    });
+
+    groups.forEach(function (group) {
+      findings.push(buildMergeFinding(group.names, group.pairs, index));
+    });
+
+    // Pairs that ended up in no group become their own finding. All of them
+    // arrive here sharing at least one track, or with identical names.
+    var seenPairs = new Set();
+    pairs.forEach(function (pair) {
+      var pairKey = pair.__a < pair.__b ? pair.__a + '\u0000' + pair.__b : pair.__b + '\u0000' + pair.__a;
+      if (seenPairs.has(pairKey)) return;
+      seenPairs.add(pairKey);
+      if (namesInGroups.has(pair.__a) || namesInGroups.has(pair.__b)) return;
+      findings.push(buildMergeFinding([pair.__a, pair.__b], [pair], index));
+    });
+    return findings.filter(Boolean);
+  }
+
+  function buildMergeFinding(names, pairs, index) {
+    var variants = names
+      .map(function (name) {
+        var data = index.artists.get(name);
+        return data ? variantOf(name, data) : null;
+      })
+      .filter(Boolean);
+    if (variants.length < 2) return null;
+    var canonical = chooseCanonical(variants);
+    var target = canonical.value;
+    // If the winning form is itself a combined name (“Ana, Bruno”), the other
+    // forms should not be merged into it: they go straight to the artist that
+    // name stands for (“Ana”), exactly as the combined-name detector proposes.
+    // Otherwise the report would contradict itself, telling you to rename to the
+    // very name it is asking you to get rid of somewhere else.
+    var redirect = combinedResolution(canonical.value, index);
+    if (redirect && !variants.some(function (v) { return v.value === redirect.base.artist.name; })) {
+      target = redirect.base.artist.name;
+    } else {
+      redirect = null;
+    }
+    var frequent = variants.slice().sort(function (a, b) { return b.n - a.n; })[0];
+    var recent = variants.slice().sort(function (a, b) { return (b.last || 0) - (a.last || 0); })[0];
+    var impact = variants.reduce(function (acc, v) {
+      return v.value === target ? acc : acc + v.n;
+    }, 0);
+    if (!impact) return null;
+    var points = Math.max.apply(null, pairs.map(function (p) { return p.points; }));
+    var signals = [];
+    var alreadyAdded = new Set();
+    pairs.forEach(function (pair) {
+      pair.signals.forEach(function (s) {
+        if (alreadyAdded.has(s.text) || signals.length >= 9) return;
+        alreadyAdded.add(s.text);
+        signals.push(s);
+      });
+    });
+    if (redirect) {
+      signals.push(
+        signal(
+          '“' + canonical.value + '” is itself a combined name whose first artist is “' + target +
+            '”, so every form here is renamed straight to “' + target + '”',
+          'strong'
+        )
+      );
+    } else if (recent && recent.value !== canonical.value) {
+      signals.push(
+        signal(
+          'Careful: the most recent scrobble is under “' + recent.value + '” (' + shortDate(recent.last) +
+            ') while the most frequent form is “' + frequent.value + '” (' + num(frequent.n) + ' scrobbles)',
+          'note'
+        )
+      );
+    } else if (recent) {
+      signals.push(signal('They agree: “' + canonical.value + '” is both the most frequent and the most recent', 'medium'));
+    }
+    var items = [];
+    var seenItems = new Set();
+    pairs.forEach(function (pair) {
+      var list = (pair.evidence && pair.evidence.items) || [];
+      list.forEach(function (item) {
+        if (seenItems.has(item.a) || items.length >= RULES.maxEvidence) return;
+        seenItems.add(item.a);
+        items.push(item);
+      });
+    });
+    var alternatives = variants
+      .filter(function (v) { return v.value !== target; })
+      .map(function (v) {
+        return {
+          value: v.value,
+          reason:
+            num(v.n) + ' scrobbles · ' + shortDate(v.first) + ' → ' + shortDate(v.last) +
+            (v.value === frequent.value ? ' · the most frequent' : '') +
+            (recent && v.value === recent.value ? ' · the most recent' : '')
+        };
+      });
+    var nonCanonical = variants.filter(function (v) { return v.value !== target; });
+    var finding = newFinding({
+      type: 'duplicate_artists',
+      subtype: pairs.length > 1 ? 'group' : pairs[0].relation,
+      title:
+        nonCanonical.length === 1
+          ? '“' + nonCanonical[0].value + '” → “' + target + '”'
+          : nonCanonical.length + ' forms of the same artist → “' + target + '”',
+      points: points,
+      impact: impact,
+      action: 'rename_artist',
+      current: nonCanonical.map(function (v) { return v.value; }).join('  /  '),
+      proposed: target,
+      signals: signals,
+      explanation: mergeExplanation(variants, target, frequent, recent, pairs),
+      evidence: items.length ? { title: 'Tracks present under more than one form', items: items } : null,
+      alternatives: alternatives
+    });
+    finding.variants = variants
+      .slice()
+      .sort(function (a, b) { return b.n - a.n; })
+      .map(function (v) {
+        return {
+          value: v.value,
+          n: v.n,
+          first: v.first,
+          last: v.last,
+          canonical: v.value === target
+        };
+      });
+    finding.__artists = nonCanonical.map(function (v) { return v.value; });
+    return finding;
+  }
+
+  function mergeExplanation(variants, target, frequent, recent, pairs) {
+    var parts = [];
+    var maxShared = Math.max.apply(null, pairs.map(function (p) { return p.shared; }));
+    var maxCoverage = Math.max.apply(
+      null,
+      pairs.map(function (p) { return p.minTracks ? p.shared / p.minTracks : 0; })
+    );
+    var total = variants.reduce(function (a, v) { return a + v.n; }, 0);
+    parts.push(
+      'Your library has ' + variants.length + ' name(s) pointing at the same artist: ' +
+      variants.map(function (v) { return '“' + v.value + '” (' + num(v.n) + ' scrobbles)'; }).join(', ') +
+      '.'
+    );
+    if (maxShared > 0) {
+      parts.push(
+        'The strongest clue is that they share tracks: up to ' + num(maxShared) + ' in common' +
+        (maxCoverage >= 1
+          ? ', that is, EVERY track under the smaller entry also appears under the other one'
+          : '') +
+        '.'
+      );
+    }
+    parts.push(
+      'That proves nothing on its own (they could be two different artists covering the same songs), ' +
+      'but if they are the same, you are splitting across ' + variants.length + ' entries what should be ' +
+      'a single one: ' + num(total) + ' scrobbles in total.'
+    );
+    var kept = variants.filter(function (v) { return v.value === target; });
+    parts.push(
+      'Proposal: keep “' + target + '”' +
+      (kept.length ? '' : ' (which is not one of the forms above)') +
+      ' and rename ' + num(variants.length - kept.length) + ' name(s), which would touch ' +
+      num(variants.reduce(function (a, v) { return v.value === target ? a : a + v.n; }, 0)) +
+      ' scrobbles.'
+    );
+    return parts.join(' ');
+  }
+
+  /* --- 6.2 Artist repeated inside the track title ---------------------------- */
+
+  function detectArtistInTitle(scrobbles) {
+    var groups = new Map();
+    for (var i = 0; i < scrobbles.length; i++) {
+      var s = scrobbles[i];
+      if (!s.artist || !s.title) continue;
+      var aKey = artistKey(s.artist);
+      if (aKey.length < 3) continue;
+      var rawTitle = normaliseText(s.title);
+      if (key(rawTitle).indexOf(aKey + ' ') !== 0) continue;
+      var rest = rawTitle.slice(s.artist.length);
+      if (!/^\s*[-–—:]\s*\S/.test(rest)) continue;
+      var cleaned = normaliseText(rest.replace(/^\s*[-–—:]\s*/, ''));
+      if (!cleaned) continue;
+      var groupKey = s.artist + '\u0000' + s.title;
+      var group = groups.get(groupKey);
+      if (!group) {
+        group = { artist: s.artist, current: s.title, proposed: cleaned, n: 0 };
+        groups.set(groupKey, group);
+      }
+      group.n++;
+    }
+    var out = [];
+    groups.forEach(function (group) {
+      var points = 62 + Math.min(20, Math.log10(1 + group.n) * 12);
+      if (group.n > 5) points += 6;
+      var finding = newFinding({
+        type: 'artist_in_title',
+        title: 'Title repeats the artist: “' + group.current + '”',
+        points: points,
+        impact: group.n,
+        action: 'strip_artist_from_title',
+        current: group.artist + ' — ' + group.current,
+        proposed: group.proposed,
+        signals: [
+          signal('The title starts with the artist name and repeats it', 'strong'),
+          signal(num(group.n) + ' scrobble(s) with this form', 'medium')
+        ],
+        explanation:
+          'The Artist field already says “' + group.artist + '”, yet the title repeats it. That is typical ' +
+          'of a badly tagged file or an import. Proposal: leave the title as “' + group.proposed + '”.',
+        evidence: { title: 'Full form', items: [{ a: group.current, b: num(group.n) + ' scrobbles' }] }
+      });
+      finding.__variants = [[group.artist, group.current]];
+      out.push(finding);
+    });
+    return out;
+  }
+
+  /* --- 6.3 Combined artist names -------------------------------------------- */
+
+  /**
+   * How a combined name (“A, B and C”) should be read. Returns null when the name
+   * does not join several artists, or when none of them exists separately.
+   *
+   *   artist    the record of the name itself
+   *   parts     the artists the name joins, in the order they are written
+   *   bases     those that exist on their own in this library
+   *   base      the proposal: the FIRST of them, not the most scrobbled one
+   *   siblings  the same name written differently (“Ana Bruno” for “Ana, Bruno”)
+   *
+   * The duplicate-name detector uses the very same function, so the two can never
+   * propose different targets for the same artist.
+   */
+  function combinedResolution(name, index) {
+    var artist = index.artists.get(name);
+    if (!artist || !artist.parts || artist.parts.length < 2) return null;
+    var bases = [];
+    artist.parts.forEach(function (part) {
+      var partKey = artistKey(part);
+      for (var i = 0; i < index.list.length; i++) {
+        var other = index.list[i];
+        if (other.name === name) continue;
+        if (other.key === partKey) {
+          bases.push({ part: part, artist: other });
+          return;
+        }
+      }
+    });
+    if (!bases.length) return null; // no standalone base: probably a real group
+    var base = bases[0];
+    // Guard against false positives: a base with a single scrobble is likely a
+    // coincidence, and if the combined name is far more frequent than the base,
+    // the duplicate is more likely the base, not the other way round.
+    if (base.artist.n < 2) return null;
+    if (base.artist.n < 0.05 * artist.n) return null;
+    // The same name without its separator (“Ana Bruno”) is the same artist, only
+    // written differently, so it is swept up by this finding instead of becoming
+    // a finding of its own pointing somewhere else.
+    var siblings = [];
+    index.list.forEach(function (other) {
+      if (other.name !== name && other.key === artist.key) siblings.push(other);
+    });
+    return { artist: artist, parts: artist.parts, bases: bases, base: base, siblings: siblings };
+  }
+
+  function detectCombinedArtists(index) {
+    var out = [];
+    index.list.forEach(function (artist) {
+      var resolution = combinedResolution(artist.name, index);
+      if (!resolution) return;
+      var group = { name: artist.name, n: artist.n, parts: resolution.parts };
+      var existingBases = resolution.bases;
+      var base = resolution.base;
+      var siblings = resolution.siblings;
+      var siblingNames = siblings.map(function (sb) { return sb.name; });
+      var impact = siblings.reduce(function (acc, sb) { return acc + sb.n; }, group.n);
+      var isFirst = artistKey(group.parts[0]) === base.artist.key;
+
+      var rest = group.parts.filter(function (p) {
+        return p !== base.part;
+      });
+      var points = 55;
+      var warning = '';
+      var signals = [
+        signal('The name joins several artists separated by “' + visibleSeparator(group.name) + '”', 'medium')
+      ];
+      signals.push(signal('“' + base.artist.name + '” exists on its own with ' + num(base.artist.n) + ' scrobbles', 'strong'));
+      if (!isFirst) {
+        points -= 8;
+        warning =
+          'The name starts with “' + group.parts[0] + '”, but you do not have that artist on its own, so ' +
+          'the proposal uses the first artist of the name that does exist in your library: “' +
+          base.artist.name + '”. If the main artist was “' + group.parts[0] + '”, check the name before ' +
+          'applying it.';
+        signals.push(
+          signal('The first artist of the name (“' + group.parts[0] + '”) does not exist separately in your library', 'note')
+        );
+      }
+      if (existingBases.length > 1) {
+        points -= 6;
+        signals.push(
+          signal(
+            'Other artists in this name that also exist separately: ' +
+              existingBases
+                .slice(1)
+                .map(function (b) { return '“' + b.artist.name + '” (' + num(b.artist.n) + ')'; })
+                .join(', '),
+            'info'
+          )
+        );
+      }
+      if (group.n <= 5) {
+        points += 12;
+        signals.push(signal('Only ' + num(group.n) + ' scrobble(s) under the combined name', 'medium'));
+      }
+      if (base.artist.n >= 20) points += 8;
+      if (datesNearby(index.artists.get(group.name), base.artist)) {
+        points += 8;
+        signals.push(signal('The combined scrobbles fall close in time to the base artist’s scrobbles', 'medium'));
+      }
+      var sharedTitles = 0;
+      var examples = [];
+      var combined = index.artists.get(group.name);
+      if (combined) {
+        combined.tracks.forEach(function (track, k) {
+          if (base.artist.tracks.has(k)) {
+            sharedTitles++;
+            if (examples.length < RULES.maxEvidence) {
+              examples.push({ a: mostFrequent(track.titles), b: 'also under “' + base.artist.name + '”' });
+            }
+          }
+        });
+      }
+      if (sharedTitles) {
+        points += 12;
+        signals.push(
+          signal('There are ' + num(sharedTitles) + ' track(s) you also have under “' + base.artist.name + '”', 'strong')
+        );
+      }
+      if (siblingNames.length) {
+        points += 4;
+        signals.push(
+          signal(
+            'The same name also appears as ' +
+              siblingNames.map(function (sb) { return '“' + sb + '”'; }).join(', ') +
+              ' (' + num(impact - group.n) + ' scrobble(s)), with the separator as the only difference',
+            'strong'
+          )
+        );
+      }
+      var finding = newFinding({
+        type: 'combined_artists',
+        title: '“' + group.name + '” → “' + base.artist.name + '”',
+        points: points,
+        impact: impact,
+        action: 'split_combined',
+        current: [group.name].concat(siblingNames).join('  /  '),
+        proposed: base.artist.name,
+        signals: signals,
+        warning: warning,
+        explanation:
+          'You have ' + num(impact) + ' scrobble(s) under “' + group.name + '”' +
+          (siblingNames.length ? ' (and its variant ' + siblingNames.join(', ') + ')' : '') +
+          ', which appears to join ' +
+          num(group.parts.length) + ' artists. As “' + base.artist.name + '” does exist on its own in your ' +
+          'library (' + num(base.artist.n) + ' scrobbles), the likeliest reading is that these scrobbles ' +
+          'should sit under “' + base.artist.name + '” and that the rest (' + rest.join(', ') + ') is a ' +
+          'featuring credit that belongs in the title, not in the artist field. BUT if “' + group.name +
+          '” is a real group (a duo, say), leave it as it is.',
+        evidence: examples.length
+          ? { title: 'Tracks you also have under the base artist', items: examples }
+          : null,
+        alternatives: rest.map(function (r) {
+          return { value: r, reason: 'part of the combined name' };
+        })
+      });
+      if (siblingNames.length) {
+        finding.variantsTitle = 'Forms of this artist name';
+        finding.variants = [group]
+          .map(function (g) {
+            return { value: g.name, n: g.n, first: artist.first, last: artist.last, canonical: false };
+          })
+          .concat(
+            siblings.map(function (sb) {
+              return { value: sb.name, n: sb.n, first: sb.first, last: sb.last, canonical: false };
+            })
+          );
+      }
+      finding.__artists = [group.name].concat(siblingNames);
+      out.push(finding);
+    });
+    return out;
+  }
+
+  function visibleSeparator(name) {
+    if (/,/.test(name)) return ',';
+    if (/\s&\s/.test(name)) return ' &';
+    return 'several';
+  }
+
+  function datesNearby(a, b) {
+    if (!a || !b) return false;
+    var day = 24 * 3600 * 1000;
+    return Math.abs((a.last || 0) - (b.first || 0)) < 7 * day || countTemporalMix(a.timestamps, b.timestamps) > 0;
+  }
+
+  /* --- 6.4 Inconsistent track titles ---------------------------------------- */
+
+  function detectTitleVariants(scrobbles) {
+    var byArtist = new Map(); // artist -> Map(loose key -> Map(raw title -> n))
+    for (var i = 0; i < scrobbles.length; i++) {
+      var s = scrobbles[i];
+      var k = s.__key != null ? s.__key : (s.__key = looseTitleKey(s.title));
+      if (!k) continue;
+      var tracks = byArtist.get(s.artist);
+      if (!tracks) {
+        tracks = new Map();
+        byArtist.set(s.artist, tracks);
+      }
+      var spellings = tracks.get(k);
+      if (!spellings) {
+        spellings = new Map();
+        tracks.set(k, spellings);
+      }
+      spellings.set(s.title, (spellings.get(s.title) || 0) + 1);
+    }
+    var out = [];
+    byArtist.forEach(function (tracks, artist) {
+      tracks.forEach(function (spellings) {
+        if (spellings.size < 2) return;
+        var variants = [];
+        spellings.forEach(function (n, raw) {
+          variants.push({
+            value: raw,
+            n: n,
+            strict: strictTitleKey(raw),
+            qualifiers: qualifiersOf(raw),
+            differentVersion: RE_DIFFERENT_VERSION.test(key(raw))
+          });
+        });
+        if (variants.length < 2) return;
+        var strictKeys = new Set(variants.map(function (v) { return v.strict; }));
+        var qualifiers = new Set(variants.map(function (v) { return v.qualifiers || ''; }));
+        var withoutQualifier = variants.filter(function (v) { return !v.qualifiers; });
+        var withQualifier = variants.filter(function (v) { return v.qualifiers; });
+        // Is the featuring credit the only difference?
+        var signatures = new Set(
+          variants.map(function (v) {
+            var parts = titleParts(v.value);
+            var others = parts.qualifiers.filter(function (q) {
+              return !/^\s*(feat|featuring|ft|with|con)\b/.test(q);
+            });
+            return key(parts.base) + '|' + others.join(',');
+          })
+        );
+        var featuringOnly =
+          signatures.size === 1 &&
+          variants.some(function (v) {
+            return /\b(feat|featuring|ft|with)\b/.test(key(v.value));
+          });
+        var points;
+        var signals = [];
+        var warning = '';
+        var subtype;
+        if (featuringOnly && strictKeys.size > 1) {
+          subtype = 'featuring';
+          points = 55;
+          signals.push(
+            signal('Same title, but one form carries the featuring credit in brackets and the other does not', 'strong')
+          );
+          warning =
+            'In Last.fm the featuring credit usually stays in the title ONLY if the main artist does not ' +
+            'already carry it. Pick one of the two forms and apply it to all of them.';
+        } else if (strictKeys.size === 1) {
+          subtype = 'formatting';
+          points = 85;
+          signals.push(signal('Written identically bar capitalisation, accents, quotes or spaces', 'strong'));
+        } else if (qualifiers.size === 1 && withQualifier.length === variants.length) {
+          subtype = 'qualifier_formatting';
+          points = 78;
+          signals.push(signal('Same qualifier, but in brackets in one form and after a dash in the other', 'strong'));
+        } else if (withoutQualifier.length && withQualifier.length) {
+          subtype = 'one_qualified';
+          points = 52;
+          signals.push(signal('One form carries no qualifier and the other does', 'medium'));
+          if (withQualifier.some(function (v) { return v.differentVersion; })) {
+            warning =
+              'Careful: that qualifier (live, remix, acoustic, version…) usually means a DIFFERENT ' +
+              'recording. Do not merge without checking.';
+            points = 40;
+          }
+        } else {
+          subtype = 'different_qualifiers';
+          points = 38;
+          signals.push(signal('The qualifiers differ from one another', 'weak'));
+          warning = 'These may well be different versions. Check them one by one before merging.';
+        }
+        var ordered = variants.slice().sort(function (x, y) { return y.n - x.n; });
+        var canonical = chooseCanonical(ordered);
+        var impact = variants.reduce(function (acc, v) {
+          return v.value === canonical.value ? acc : acc + v.n;
+        }, 0);
+        if (!impact) return;
+        var examples = ordered.map(function (v) {
+          return { a: v.value, b: num(v.n) + ' scrobble(s)' };
+        });
+        var finding = newFinding({
+          type: 'title_variants',
+          subtype: subtype,
+          title: '“' + artist + '” — ' + variants.length + ' forms of the same title',
+          points: points + Math.min(8, Math.log10(1 + impact) * 6),
+          impact: impact,
+          action: 'rename_track',
+          current: variants
+            .filter(function (v) { return v.value !== canonical.value; })
+            .map(function (v) { return v.value; })
+            .join('  /  '),
+          proposed: canonical.value,
+          signals: signals,
+          warning: warning,
+          explanation:
+            'Under “' + artist + '” you have ' + variants.length + ' different forms of the same title. ' +
+            'The proposal is to keep “' + canonical.value + '” (' + num(canonical.n) + ' scrobbles) and ' +
+            'change ' + num(impact) + ' scrobble(s) of the other forms.',
+          evidence: { title: 'Forms found', items: examples },
+          alternatives: ordered
+            .filter(function (v) { return v.value !== canonical.value; })
+            .slice(0, 3)
+            .map(function (v) {
+              return { value: v.value, reason: num(v.n) + ' scrobbles' };
+            })
+        });
+        finding.__variants = variants
+          .filter(function (v) { return v.value !== canonical.value; })
+          .map(function (v) { return [artist, v.value]; });
+        out.push(finding);
+      });
+    });
+    return out;
+  }
+
+  /* --- 6.5 Albums ------------------------------------------------------------ */
+
+  function detectAlbumIssues(scrobbles, index) {
+    var out = [];
+    // (a) fillable missing albums and (b) album clashes
+    var byCombo = new Map();
+    for (var i = 0; i < scrobbles.length; i++) {
+      var s = scrobbles[i];
+      var trackKey = s.__key != null ? s.__key : (s.__key = looseTitleKey(s.title));
+      var comboKey = s.artist + '\u0000' + trackKey;
+      var group = byCombo.get(comboKey);
+      if (!group) {
+        group = { artist: s.artist, trackKey: trackKey, titles: new Map(), albums: new Map(), missing: 0, n: 0 };
+        byCombo.set(comboKey, group);
+      }
+      group.n++;
+      group.titles.set(s.title, (group.titles.get(s.title) || 0) + 1);
+      if (s.album) group.albums.set(s.album, (group.albums.get(s.album) || 0) + 1);
+      else group.missing++;
+    }
+    byCombo.forEach(function (group) {
+      var title = mostFrequent(group.titles);
+      if (group.missing > 0 && group.albums.size > 0) {
+        var bestAlbum = mostFrequent(group.albums);
+        var bestCount = group.albums.get(bestAlbum);
+        var sameAsTitle = key(bestAlbum) === looseTitleKey(title);
+        var points = 78 + (group.missing >= 3 ? 8 : 0) + (bestCount / (group.n - group.missing) >= 0.8 ? 6 : 0);
+        if (sameAsTitle) points = 52;
+        var missingFinding = newFinding({
+          type: 'albums',
+          subtype: 'missing',
+          title: 'No album: “' + group.artist + ' — ' + title + '”',
+          points: points,
+          impact: group.missing,
+          action: 'fill_album',
+          current: title,
+          proposed: bestAlbum,
+          warning: sameAsTitle
+            ? 'The album that would be filled in (“' + bestAlbum + '”) is named AFTER the track. That is ' +
+              'usually a wrong automatic tag from the importer rather than the real album: check which album ' +
+              'it really came from before touching anything.'
+            : '',
+          signals: [
+            signal(num(group.missing) + ' scrobble(s) of this track have no album', 'strong'),
+            signal('Another ' + num(group.n - group.missing) + ' do have “' + bestAlbum + '”', sameAsTitle ? 'medium' : 'strong'),
+            sameAsTitle ? signal('The album “' + bestAlbum + '” matches the track title', 'note') : null
+          ].filter(Boolean),
+          explanation:
+            'The same track appears with and without an album under “' + group.artist + '”. ' +
+            (sameAsTitle
+              ? 'The album that some scrobbles carry is named after the track, so it is probably a wrong tag: ' +
+                'filling the empty ones with it would spread the mistake.'
+              : 'As the album “' + bestAlbum + '” is already there on ' + num(bestCount) + ' scrobble(s), the ' +
+                'sensible move is to fill in the ' + num(group.missing) + ' that are empty.'),
+          evidence: {
+            title: 'Albums seen for this track',
+            items: Array.from(group.albums.entries())
+              .sort(function (x, y) { return y[1] - x[1]; })
+              .map(function (e) { return { a: e[0], b: num(e[1]) + ' scrobble(s)' }; })
+              .concat([{ a: '(no album)', b: num(group.missing) + ' scrobble(s)' }])
+          }
+        });
+        missingFinding.__emptyAlbums = [[group.artist, group.trackKey]];
+        out.push(missingFinding);
+      }
+      if (group.albums.size > 1) {
+        var ranked = Array.from(group.albums.entries()).sort(function (x, y) { return y[1] - x[1]; });
+        var canonical = { value: ranked[0][0], n: ranked[0][1] };
+        var impact = group.n - canonical.n - group.missing;
+        // The "single vs album" case is legitimate and very common: only list it
+        // when there is enough volume to be worth a look.
+        if (impact < RULES.minAlbumImpact) return;
+        var points2 = 48 + Math.min(10, Math.log10(1 + impact) * 6);
+        var canonicalLooksLikeTitle = key(canonical.value) === looseTitleKey(title);
+        if (canonicalLooksLikeTitle) points2 = Math.min(points2, 44);
+        var anyAlbumEqualsTitle = Array.from(group.albums.keys()).some(function (a) {
+          return key(a) === looseTitleKey(title);
+        });
+        var clash = newFinding({
+          type: 'albums',
+          subtype: 'clash',
+          title: 'Several albums: “' + group.artist + ' — ' + title + '”',
+          points: points2,
+          impact: Math.max(impact, 0),
+          action: 'review_album',
+          current: title,
+          proposed: canonical.value,
+          warning: anyAlbumEqualsTitle
+            ? 'One of the albums is named after the track, and that pattern is usually a wrong automatic tag. ' +
+              'Check which album it really belongs to.'
+            : '',
+          signals: [
+            signal('The same title appears with ' + num(group.albums.size) + ' different albums', 'medium'),
+            signal('The most used is “' + canonical.value + '” (' + num(canonical.n) + ' scrobbles)', 'medium'),
+            anyAlbumEqualsTitle ? signal('One album matches the track title', 'note') : null
+          ].filter(Boolean),
+          explanation:
+            'This may be correct (the single and the album are different things) or just a slip. If you want ' +
+            'to merge them, “' + canonical.value + '” is the most frequent. If not, ignore this finding.',
+          evidence: {
+            title: 'Albums seen',
+            items: ranked.map(function (e) { return { a: e[0], b: num(e[1]) + ' scrobble(s)' }; })
+          }
+        });
+        clash.__albums = ranked
+          .filter(function (e) { return e[0] !== canonical.value; })
+          .map(function (e) { return [group.artist, group.trackKey, e[0]]; });
+        out.push(clash);
+      }
+    });
+
+    // (c) album name variants (formatting differences only)
+    var cosmetic = [];
+    index.albumNames.forEach(function (spellings) {
+      if (spellings.size < 2) return;
+      var ranked = Array.from(spellings.entries()).sort(function (x, y) { return y[1] - x[1]; });
+      // Only when the difference is capitalisation/accents/spaces/quotes
+      var flattened = new Set(ranked.map(function (e) { return stripAccents(e[0]).toLowerCase(); }));
+      if (flattened.size !== 1) return;
+      var canonical = ranked[0][0];
+      var impact = ranked.reduce(function (acc, e) { return e[0] === canonical ? acc : acc + e[1]; }, 0);
+      if (!impact) return;
+      var finding = newFinding({
+        type: 'albums',
+        subtype: 'name_variants',
+        title: 'Album with ' + ranked.length + ' forms: “' + canonical + '”',
+        points: 74 + Math.min(10, Math.log10(1 + impact) * 8),
+        impact: impact,
+        action: 'merge_album',
+        current: ranked
+          .filter(function (e) { return e[0] !== canonical; })
+          .map(function (e) { return e[0]; })
+          .join('  /  '),
+        proposed: canonical,
+        signals: [signal('The same album written with different capitalisation or accents', 'strong')],
+        explanation:
+          'The same album name appears with ' + ranked.length + ' spellings. In Last.fm these are technically ' +
+          'different pages, so it is worth merging them.',
+        evidence: {
+          title: 'Forms found',
+          items: ranked.map(function (e) { return { a: e[0], b: num(e[1]) + ' scrobble(s)' }; })
+        }
+      });
+      finding.__albumsGlobal = ranked
+        .filter(function (e) { return e[0] !== canonical; })
+        .map(function (e) { return e[0]; });
+      cosmetic.push(finding);
+    });
+    cosmetic.sort(function (a, b) { return b.impact - a.impact; });
+    return out.concat(cosmetic.slice(0, 60));
+  }
+
+  /* --- 6.6 Duplicate scrobbles ---------------------------------------------- */
+
+  function detectDuplicateScrobbles(scrobbles) {
+    var out = [];
+    for (var i = 0; i < scrobbles.length; i++) {
+      var s = scrobbles[i];
+      var run = [s];
+      var j = i + 1;
+      var trackKey = s.__key != null ? s.__key : (s.__key = looseTitleKey(s.title));
+      while (
+        j < scrobbles.length &&
+        scrobbles[j].artist === s.artist &&
+        (scrobbles[j].__key != null ? scrobbles[j].__key : (scrobbles[j].__key = looseTitleKey(scrobbles[j].title))) === trackKey &&
+        isFinite(scrobbles[j].ts) &&
+        isFinite(s.ts) &&
+        scrobbles[j].ts - run[run.length - 1].ts <= RULES.duplicateWindowMs
+      ) {
+        run.push(scrobbles[j]);
+        j++;
+      }
+      if (run.length > 1) {
+        var gaps = [];
+        for (var k = 1; k < run.length; k++) gaps.push(run[k].ts - run[k - 1].ts);
+        var smallestGap = Math.min.apply(null, gaps);
+        var points = smallestGap <= RULES.duplicateCertainWindowMs ? 92 : 74;
+        var extra = run.length - 1;
+        var finding = newFinding({
+          type: 'duplicate_scrobbles',
+          title: run.length + ' times in a row: “' + s.artist + ' — ' + s.title + '”',
+          points: points,
+          impact: extra,
+          action: 'delete_duplicate',
+          current: run.length + ' consecutive scrobbles',
+          proposed: 'keep 1',
+          signals: [
+            signal(
+              'Same artist and track ' + run.length + ' times, ' + humanDuration(smallestGap) + ' apart at the closest',
+              points >= 90 ? 'strong' : 'medium'
+            ),
+            signal('Timestamps: ' + run.map(function (x) { return dateTime(x.ts); }).join(' · '), 'info')
+          ],
+          explanation:
+            'Repetitions less than ' + humanDuration(smallestGap) + ' apart. If you do not remember playing it ' +
+            'twice in a row, ' + num(extra) + ' scrobble(s) too many. Careful: if you were looping it on ' +
+            'purpose, delete nothing.',
+          evidence: {
+            title: 'Scrobbles',
+            items: run.map(function (x, index) {
+              return {
+                a: dateTime(x.ts),
+                b: (x.album || '(no album)') + (index === 0 ? ' ← keep' : '')
+              };
+            })
+          }
+        });
+        finding.__duplicateIndexes = run.slice(1).map(function (x) { return x.i; });
+        out.push(finding);
+        j = j - 1;
+      }
+    }
+    return out;
+  }
+
+  /* --- 6.7 Long tail -------------------------------------------------------- */
+
+  function detectLongTail(scrobbles, index) {
+    var out = [];
+
+    /* (a) likely typos, measured against frequent artists */
+    var frequent = index.list.filter(function (a) {
+      return a.n >= RULES.minScrobblesForTypoCompare;
+    });
+    var byInitial = new Map();
+    var byFirstWord = new Map();
+    frequent.forEach(function (a) {
+      if (!a.key) return;
+      var initial = a.key.slice(0, 1);
+      var group = byInitial.get(initial);
+      if (!group) {
+        group = [];
+        byInitial.set(initial, group);
+      }
+      group.push(a);
+      var word = a.key.split(' ')[0];
+      if (word.length >= 2) {
+        var wordGroup = byFirstWord.get(word);
+        if (!wordGroup) {
+          wordGroup = [];
+          byFirstWord.set(word, wordGroup);
+        }
+        wordGroup.push(a);
+      }
+    });
+    var rare = index.list.filter(function (a) {
+      return a.n <= RULES.maxScrobblesForRareArtist;
+    });
+    rare.forEach(function (r) {
+      if (!r.key) return;
+      var candidates = new Set(
+        (byInitial.get(r.key.slice(0, 1)) || []).concat(byFirstWord.get(r.key.split(' ')[0]) || [])
+      );
+      var best = null;
+      var bestDistance = 99;
+      candidates.forEach(function (c) {
+        if (c.name === r.name || c.key === r.key) return;
+        var max = c.key.length > 10 ? RULES.maxTypoDistance + 1 : RULES.maxTypoDistance;
+        var d = editDistance(r.key, c.key, max);
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = c;
+        }
+      });
+      var shared = 0;
+      if (best) {
+        r.tracks.forEach(function (track, k) {
+          if (best.tracks.has(k)) shared++;
+        });
+      }
+      var containment = best && containsWord(best.key, r.key);
+      if (!best || (bestDistance > RULES.maxTypoDistance && !containment)) return;
+      var garbled = /[^\p{L}\p{N}\s'&.,\-]/u.test(r.name);
+      // Same rule as for duplicates: no shared track (and no clearly garbled
+      // name) means no proposal.
+      if (RULES.requireSharedTrack && shared === 0 && !garbled) return;
+      // Name similarity on its own is weak evidence: nearly all the weight comes
+      // from shared tracks and from being close in time.
+      var points = 25;
+      var signals = [];
+      if (containment) {
+        points += 20;
+        signals.push(signal('The name is part of the name of “' + best.name + '”', 'strong'));
+      } else if (bestDistance === 1) {
+        points += 15;
+        signals.push(signal('It differs by 1 character from “' + best.name + '”', 'strong'));
+      } else {
+        points += 8;
+        signals.push(signal('It differs by ' + bestDistance + ' characters from “' + best.name + '”', 'medium'));
+      }
+      if (shared) {
+        points += 20;
+        signals.push(signal('Shares ' + num(shared) + ' track(s) with “' + best.name + '”', 'strong'));
+      }
+      var mixing = countTemporalMix(r.timestamps, best.timestamps);
+      if (mixing) {
+        points += 15;
+        signals.push(
+          signal(mixing + ' scrobble(s) fall within 10 min of scrobbles of “' + best.name + '”', 'strong')
+        );
+      }
+      if (r.key.length <= 4 && bestDistance > 0 && !containment) {
+        points -= 10;
+        signals.push(signal('The name is very short: in four letters, one character apart can be someone else', 'note'));
+      }
+      if (garbled) {
+        points += 20;
+        signals.push(
+          signal('The name holds garbled or unusual characters (“ĹĄ”, “Ⴟ”…), typical of an encoding problem', 'strong')
+        );
+      }
+      signals.push(signal('“' + r.name + '” only has ' + num(r.n) + ' scrobble(s)', 'note'));
+      var finding = newFinding({
+        type: 'long_tail',
+        subtype: 'possible_typo',
+        title: 'Is “' + r.name + '” really “' + best.name + '”?',
+        points: points,
+        impact: r.n,
+        action: 'rename_artist',
+        current: r.name,
+        proposed: best.name,
+        signals: signals,
+        explanation:
+          '“' + r.name + '” appears only ' + num(r.n) + ' time(s) in your library and its name resembles ' +
+          '“' + best.name + '” (' + num(best.n) + ' scrobbles). ' +
+          (shared
+            ? 'They also share a track, so it is very probably the same artist misspelled.'
+            : 'They share no tracks, so it could be a different artist: check it.'),
+        evidence: {
+          title: 'Comparison',
+          items: [
+            { a: '“' + r.name + '”', b: num(r.n) + ' scrobble(s), ' + shortDate(r.first) + ' → ' + shortDate(r.last) },
+            { a: '“' + best.name + '”', b: num(best.n) + ' scrobble(s), ' + shortDate(best.first) + ' → ' + shortDate(best.last) },
+            { a: 'Tracks in common', b: num(shared) }
+          ]
+        }
+      });
+      finding.__artists = [r.name];
+      out.push(finding);
+    });
+
+    /* (b) messy text and empty fields */
+    var issues = {};
+    function note(issue, example) {
+      if (!issues[issue]) issues[issue] = { n: 0, examples: new Set() };
+      issues[issue].n++;
+      if (issues[issue].examples.size < 8) issues[issue].examples.add(example);
+    }
+    var GENERIC =
+      /^(unknown artist|unknown|various artists|artista desconocido|va|vv\.?aa\.?|desconocido)$/i;
+    var FIELDS = [['artist', 'artist'], ['title', 'title'], ['album', 'album']];
+    for (var q = 0; q < scrobbles.length; q++) {
+      var s2 = scrobbles[q];
+      FIELDS.forEach(function (pair) {
+        var fieldName = pair[0];
+        var value = s2[pair[1]];
+        if (!value) return;
+        if (value !== value.trim()) note('leading or trailing spaces in the ' + fieldName, value);
+        if (/\s{2,}/.test(value)) note('double spaces in the ' + fieldName, value);
+        if (/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/.test(value)) {
+          note('unusual (non-breaking) spaces in the ' + fieldName, value.replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, '␣'));
+        }
+        if (/[\u200B-\u200F\uFEFF]/.test(value)) note('invisible characters in the ' + fieldName, value);
+        if (/[\uFFFD]/.test(value)) note('unreadable characters in the ' + fieldName, value);
+        if (fieldName === 'artist' && GENERIC.test(value)) note('generic artist name', value);
+      });
+      if (!s2.title) note('scrobbles with no title', '(empty)');
+      if (!s2.artist) note('scrobbles with no artist', '(empty)');
+      if (!s2.album) note('scrobbles with no album', '(empty)');
+    }
+    var dirty = Object.keys(issues)
+      .map(function (k) {
+        return { k: k, n: issues[k].n, examples: Array.from(issues[k].examples) };
+      })
+      .sort(function (a, b) { return b.n - a.n; });
+    var textIssues = dirty.filter(function (x) { return x.k !== 'scrobbles with no album'; });
+    var emptyIssues = dirty.filter(function (x) { return x.k === 'scrobbles with no album'; });
+    if (textIssues.length) {
+      out.push(
+        newFinding({
+          type: 'long_tail',
+          subtype: 'hygiene',
+          informational: true,
+          title: 'Messy text: ' + num(textIssues.reduce(function (a, x) { return a + x.n; }, 0)) + ' scrobbles with formatting details',
+          points: 70,
+          impact: textIssues.reduce(function (a, x) { return a + x.n; }, 0),
+          action: 'review',
+          current: 'various tags',
+          proposed: '(normalise)',
+          signals: textIssues.slice(0, 6).map(function (x) {
+            return signal(num(x.n) + ' × ' + x.k, 'medium');
+          }),
+          explanation:
+            'Formatting details inside tags: stray spaces, invisible or garbled characters, generic artist ' +
+            'names or empty fields. Last.fm treats these as separate entities. Tedious but safe to fix, ' +
+            'because the correct value is obvious.',
+          table: {
+            headers: ['Problem', 'Scrobbles', 'Examples'],
+            rows: textIssues.map(function (x) {
+              return [x.k, num(x.n), x.examples.join(' · ')];
+            })
+          }
+        })
+      );
+    }
+    if (emptyIssues.length) {
+      var emptyCount = emptyIssues.reduce(function (a, x) { return a + x.n; }, 0);
+      var fillable = out.filter(function (f) {
+        return f.type === 'albums' && f.subtype === 'missing';
+      }).length;
+      out.push(
+        newFinding({
+          type: 'long_tail',
+          subtype: 'empty',
+          informational: true,
+          title: num(emptyCount) + ' scrobbles with no album',
+          points: 45,
+          impact: 0,
+          action: 'review',
+          current: num(emptyCount) + ' scrobbles with no album',
+          proposed: '(only if you know which one)',
+          signals: [
+            signal(num(emptyCount) + ' scrobbles carry no album in the CSV', 'medium'),
+            signal('This is information, not a mistake: plenty of albums are legitimately blank (singles, radio rips, mixes)', 'info')
+          ],
+          explanation:
+            'An empty album is not a mistake by itself: Last.fm leaves it blank when the scrobble carries no ' +
+            'album. Filling it in only makes sense if you know which release each track came from. ' +
+            (fillable
+              ? 'The ' + num(fillable) + ' cases where there is a clear answer are in “Albums → No album”, ' +
+                'with the track and the album that already appears on other scrobbles of the same title.'
+              : 'There is no case here with a clear answer: no empty track has an album on its other scrobbles.'),
+          table: {
+            headers: ['Artist', 'Track', 'Scrobbles with no album'],
+            rows: emptyAlbumTable(scrobbles),
+            note: 'Only the top 40 artists by volume. The actionable cases are in the albums section.'
+          }
+        })
+      );
+    }
+
+    function emptyAlbumTable(list) {
+      var counts = new Map();
+      list.forEach(function (s) {
+        if (s.album) return;
+        var k = s.artist + '\u0000' + (s.title || '(no title)');
+        var group = counts.get(k);
+        if (!group) {
+          group = { artist: s.artist, title: s.title, n: 0 };
+          counts.set(k, group);
+        }
+        group.n++;
+      });
+      return Array.from(counts.values())
+        .sort(function (a, b) { return b.n - a.n; })
+        .slice(0, 40)
+        .map(function (group) { return [group.artist, group.title, num(group.n)]; });
+    }
+
+    /* (c) a list of very rare artists, for manual review */
+    if (rare.length) {
+      out.push(
+        newFinding({
+          type: 'long_tail',
+          subtype: 'rare_artists',
+          informational: true,
+          title: num(rare.length) + ' artists with ' + RULES.maxScrobblesForRareArtist + ' scrobble(s) or fewer',
+          points: 0,
+          impact: 0,
+          action: 'review',
+          current: num(rare.length) + ' artists',
+          proposed: '(review by hand)',
+          signals: [signal('Informational list: this is where misspellings usually hide', 'info')],
+          explanation:
+            'Artists you have played ' + RULES.maxScrobblesForRareArtist + ' times or fewer. They are not ' +
+            'mistakes in themselves, but this is the list where the junk tends to sit (typos, odd tags, ' +
+            'imports). Any with a “is this really…?” finding above have already been analysed.',
+          table: {
+            headers: ['Artist', 'Scrobbles', 'First', 'Last'],
+            rows: rare.slice(0, RULES.maxTableRows).map(function (a) {
+              return [a.name, num(a.n), shortDate(a.first), shortDate(a.last)];
+            }),
+            note:
+              rare.length > RULES.maxTableRows
+                ? 'Showing ' + RULES.maxTableRows + ' of ' + num(rare.length) + '.'
+                : ''
+          }
+        })
+      );
+    }
+    return out;
+  }
+
+  /* ==========================================================================
+   * 7. Full analysis
+   * ========================================================================== */
+
+  function analyse(scrobbles, options) {
+    options = options || {};
+    var overrides = Object.assign({}, RULES, options.rules || {});
+    var originals = Object.assign({}, RULES);
+    Object.keys(overrides).forEach(function (k) {
+      RULES[k] = overrides[k];
+    });
+    var started = Date.now();
+    try {
+      return analyseWith(scrobbles, options, started);
+    } finally {
+      Object.keys(originals).forEach(function (k) {
+        RULES[k] = originals[k];
+      });
+    }
+  }
+
+  function analyseWith(scrobbles, options, started) {
+    var index = buildIndex(scrobbles);
+    var findings = [];
+
+    var combinedFindings = detectCombinedArtists(index);
+    // A name already covered by a combined-name finding must not produce a second
+    // card proposing the same rename (“Ana Bruno” next to “Ana, Bruno → Ana”).
+    var absorbed = new Map();
+    var coveredByStronger = 0;
+    combinedFindings.forEach(function (f) {
+      (f.__artists || []).forEach(function (name) {
+        absorbed.set(name, f.proposed);
+      });
+    });
+    var mergeFindings = buildMergeFindings(detectMergePairs(index), index).filter(function (f) {
+      if (!f.__artists || !f.__artists.length) return true;
+      var covered = f.__artists.every(function (name) {
+        return absorbed.get(name) === f.proposed;
+      });
+      if (covered) coveredByStronger++;
+      return !covered;
+    });
+
+    findings = findings.concat(mergeFindings);
+    findings = findings.concat(combinedFindings);
+    findings = findings.concat(detectTitleVariants(scrobbles));
+    findings = findings.concat(detectArtistInTitle(scrobbles));
+    findings = findings.concat(detectAlbumIssues(scrobbles, index));
+    findings = findings.concat(detectDuplicateScrobbles(scrobbles));
+    findings = findings.concat(detectLongTail(scrobbles, index));
+
+    // Final confidence filter: the very weak ones are not listed, but counted.
+    var minimumPoints =
+      RULES.minimumConfidence === 'high' ? RULES.highThreshold : RULES.minimumConfidence === 'low' ? 0 : RULES.mediumThreshold;
+    var omitted = findings.filter(function (f) {
+      return !f.informational && f.points < minimumPoints;
+    }).length;
+    findings = findings.filter(function (f) {
+      return f.informational || f.points >= minimumPoints;
+    });
+
+    // Order: type (per TYPE_ORDER), then impact, then points
+    findings.sort(function (a, b) {
+      var ta = TYPE_ORDER.indexOf(a.type);
+      var tb = TYPE_ORDER.indexOf(b.type);
+      if (ta !== tb) return ta - tb;
+      var ca = a.confidence === 'high' ? 0 : a.confidence === 'medium' ? 1 : 2;
+      var cb = b.confidence === 'high' ? 0 : b.confidence === 'medium' ? 1 : 2;
+      if (ca !== cb) return ca - cb;
+      return b.impact - a.impact || b.points - a.points;
+    });
+
+    // Ids have to be unique: two different findings may share type/current/proposed
+    // and must not overwrite each other's decision in the interface.
+    findings.forEach(function (f, ix) {
+      f.id = f.id + '#' + ix;
+    });
+
+    // True union of affected scrobbles: each scrobble touched by any finding is
+    // marked once, so nothing is counted twice.
+    var artistSet = new Set();
+    var variantSet = new Set();
+    var emptyAlbumSet = new Set();
+    var albumSet = new Set();
+    var albumGlobalSet = new Set();
+    var duplicateSet = new Set();
+    findings.forEach(function (f) {
+      if (f.__artists) f.__artists.forEach(function (a) { artistSet.add(a); });
+      if (f.__variants) {
+        f.__variants.forEach(function (pair) {
+          variantSet.add(pair[0] + '\u0000' + pair[1]);
+        });
+      }
+      if (f.__emptyAlbums) f.__emptyAlbums.forEach(function (pair) { emptyAlbumSet.add(pair[0] + '\u0000' + pair[1]); });
+      if (f.__albums) f.__albums.forEach(function (t) { albumSet.add(t.join('\u0000')); });
+      if (f.__albumsGlobal) f.__albumsGlobal.forEach(function (a) { albumGlobalSet.add(key(a)); });
+      if (f.__duplicateIndexes) f.__duplicateIndexes.forEach(function (i) { duplicateSet.add(i); });
+    });
+
+    var withDate = 0;
+    var from = Infinity;
+    var to = -Infinity;
+    var trackSet = new Set();
+    var albumNameSet = new Set();
+    var affectedScrobbles = 0;
+    for (var j = 0; j < scrobbles.length; j++) {
+      var s = scrobbles[j];
+      if (!isNaN(s.ts)) {
+        withDate++;
+        if (s.ts < from) from = s.ts;
+        if (s.ts > to) to = s.ts;
+      }
+      var loose = s.__key != null ? s.__key : (s.__key = looseTitleKey(s.title));
+      trackSet.add(s.artist + '\u0000' + loose);
+      if (s.album) albumNameSet.add(key(s.album));
+      var affected =
+        (s.artist && artistSet.has(s.artist)) ||
+        variantSet.has(s.artist + '\u0000' + s.title) ||
+        (s.album === '' && emptyAlbumSet.has(s.artist + '\u0000' + loose)) ||
+        (s.album !== '' && albumSet.has(s.artist + '\u0000' + loose + '\u0000' + s.album)) ||
+        (s.album !== '' && albumGlobalSet.has(key(s.album))) ||
+        duplicateSet.has(s.i);
+      if (affected) affectedScrobbles++;
+    }
+
+    var byType = {};
+    findings.forEach(function (f) {
+      var bucket = byType[f.type] || (byType[f.type] = {
+        type: f.type,
+        label: TYPE_LABELS[f.type],
+        findings: 0,
+        impact: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        actionable: 0
+      });
+      bucket.findings++;
+      bucket.impact += f.impact;
+      if (f.action !== 'review') bucket.actionable++;
+      bucket[f.confidence === 'high' ? 'high' : f.confidence === 'medium' ? 'medium' : 'low']++;
+    });
+    var typesSummary = TYPE_ORDER.filter(function (t) {
+      return byType[t];
+    }).map(function (t) {
+      return byType[t];
+    });
+
+    // Internal filtering fields are never exported.
+    findings.forEach(function (f) {
+      delete f.__artists;
+      delete f.__variants;
+      delete f.__emptyAlbums;
+      delete f.__albums;
+      delete f.__albumsGlobal;
+      delete f.__duplicateIndexes;
+    });
+
+    return {
+      version: VERSION,
+      meta: {
+        source: (scrobbles[0] && scrobbles[0].source) || options.source || '(unnamed)',
+        analysedAt: Date.now(),
+        scrobbles: scrobbles.length,
+        withDate: withDate,
+        artists: index.list.length,
+        tracks: trackSet.size,
+        albums: albumNameSet.size,
+        from: isFinite(from) ? from : null,
+        to: isFinite(to) ? to : null,
+        milliseconds: Date.now() - started,
+        rules: Object.assign({}, RULES),
+        warnings: options.warnings || []
+      },
+      summary: {
+        byType: typesSummary,
+        findings: findings.length,
+        affectedScrobbles: affectedScrobbles,
+        actions: findings.filter(function (f) {
+          return f.action !== 'review';
+        }).length,
+        highConfidenceActions: findings.filter(function (f) {
+          return f.action !== 'review' && f.confidence === 'high';
+        }).length,
+        omitted: omitted,
+        coveredByStronger: coveredByStronger,
+        minimumConfidence: RULES.minimumConfidence
+      },
+      findings: findings
+    };
+  }
+
+  /* ==========================================================================
+   * 8. Exporters
+   * ========================================================================== */
+
+  function toJSON(report) {
+    return JSON.stringify(report, null, 2);
+  }
+
+  function csvField(v) {
+    var s = v == null ? '' : String(v);
+    if (/[";\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  /**
+   * Action list, one row per finding, with an empty `decision` column so you can
+   * mark accept/reject while you work through it.
+   */
+  function toCSV(report) {
+    var header = [
+      'type', 'subtype', 'confidence', 'points', 'action', 'impact_scrobbles',
+      'current_value', 'proposed_value', 'alternatives', 'signals', 'decision', 'evidence'
+    ];
+    var rows = [header.join(';')];
+    report.findings.forEach(function (f) {
+      var evidence = '';
+      if (f.evidence && f.evidence.items) {
+        evidence = f.evidence.items
+          .map(function (item) {
+            return item.a + ' → ' + item.b;
+          })
+          .join(' | ');
+      } else if (f.table) {
+        evidence = f.table.rows.length + ' row(s): see the report';
+      }
+      rows.push(
+        [
+          f.type, f.subtype, f.confidence, f.points, f.action, f.impact, f.current, f.proposed,
+          f.alternatives.map(function (a) { return a.value + ' (' + a.reason + ')'; }).join(' | '),
+          f.signals.map(function (s) { return s.text; }).join(' | '),
+          '', evidence
+        ].map(csvField).join(';')
+      );
+    });
+    return rows.join('\n');
+  }
+
+  function toMarkdown(report) {
+    var m = report.meta;
+    var lines = [];
+    lines.push('# Last.fm Lens — scrobble cleanup report');
+    lines.push('');
+    lines.push('**Source:** ' + m.source + '  ');
+    lines.push('**Analysed:** ' + dateTime(m.analysedAt) + '  ');
+    lines.push('**Period:** ' + shortDate(m.from) + ' → ' + shortDate(m.to) + '  ');
+    lines.push(
+      '**Volume:** ' + num(m.scrobbles) + ' scrobbles · ' + num(m.artists) + ' artists · ' + num(m.tracks) +
+        ' tracks · ' + num(m.albums) + ' albums'
+    );
+    lines.push('');
+    lines.push('> This report edits nothing. Every finding is a **scored suspicion**, with the clues behind it and the concrete evidence. You decide.');
+    lines.push('');
+    lines.push('## Summary');
+    lines.push('');
+    lines.push('| Type | Findings | High | Medium | Low | Affected scrobbles |');
+    lines.push('| --- | ---: | ---: | ---: | ---: | ---: |');
+    report.summary.byType.forEach(function (t) {
+      lines.push(
+        '| ' + t.label + ' | ' + num(t.findings) + ' | ' + num(t.high) + ' | ' + num(t.medium) + ' | ' +
+          num(t.low) + ' | ' + num(t.impact) + ' |'
+      );
+    });
+    lines.push('');
+    lines.push(
+      'Total: **' + num(report.summary.findings) + ' findings**, of which **' + num(report.summary.actions) +
+        ' carry an action** and **' + num(report.summary.affectedScrobbles) + ' scrobbles are affected** (' +
+        Math.round((100 * report.summary.affectedScrobbles) / (m.scrobbles || 1)) + '%).'
+    );
+    lines.push('');
+    lines.push('**Rules applied** (they live in `RULES`, inside `src/engine.js`):');
+    lines.push('');
+    lines.push(
+      '- An artist duplicate is only proposed if the two names **share at least one track**, or if the names ' +
+        'are identical bar capitalisation/accents/punctuation. Looking similar never qualifies on its own.'
+    );
+    lines.push(
+      '- A combined artist (“A, B”) is only flagged if the first artist of the name exists separately in this library.'
+    );
+    lines.push(
+      '- An album clash is only listed from ' + num(report.meta.rules.minAlbumImpact) + ' affected scrobbles upwards.'
+    );
+    if (report.summary.omitted) {
+      lines.push(
+        '- **' + num(report.summary.omitted) + ' findings were omitted** for being low confidence (possible typos ' +
+          'with no track in common, name similarities with no evidence). To see them, set ' +
+          '`minimumConfidence: \'low\'` in `RULES`.'
+      );
+    }
+    if (report.summary.coveredByStronger) {
+      lines.push(
+        '- **' + num(report.summary.coveredByStronger) + ' duplicate-name finding(s) are not listed separately**: a ' +
+          'combined-name finding already proposes the same rename (for instance “Ana Bruno” next to ' +
+          '“Ana, Bruno → Ana”).'
+      );
+    }
+    lines.push('');
+    lines.push(
+      'This report is produced by **code alone** (normalised key comparison and sets of tracks), with no ' +
+        'language models and no external services: the same CSV always produces exactly the same report.'
+    );
+    lines.push('');
+
+    var byType = {};
+    report.findings.forEach(function (f) {
+      (byType[f.type] = byType[f.type] || []).push(f);
+    });
+    var sectionNumber = 0;
+    TYPE_ORDER.forEach(function (type) {
+      var findings = byType[type];
+      if (!findings || !findings.length) return;
+      sectionNumber++;
+      var impact = findings.reduce(function (a, f) { return a + f.impact; }, 0);
+      lines.push(
+        '## ' + sectionNumber + '. ' + TYPE_LABELS[type] + ' — ' + num(findings.length) + ' finding(s), ' +
+          num(impact) + ' scrobbles'
+      );
+      lines.push('');
+      findings.forEach(function (f, ix) {
+        lines.push('### ' + sectionNumber + '.' + (ix + 1) + ' ' + f.title);
+        lines.push('');
+        lines.push('- **Confidence:** ' + f.confidence.toUpperCase() + ' (' + f.points + '/100)');
+        lines.push('- **Impact:** ' + num(f.impact) + ' scrobble(s)');
+        lines.push('- **Action:** ' + f.actionLabel + (f.current ? ' — `' + f.current + '` → `' + f.proposed + '`' : ''));
+        if (f.signals.length) {
+          lines.push('- **Signals:**');
+          f.signals.forEach(function (s) {
+            lines.push('  - [' + s.level + '] ' + s.text);
+          });
+        }
+        if (f.explanation) {
+          lines.push('');
+          lines.push(f.explanation);
+        }
+        if (f.warning) {
+          lines.push('');
+          lines.push('⚠️ ' + f.warning);
+        }
+        if (f.variants && f.variants.length) {
+          lines.push('');
+          lines.push('| Form | Scrobbles | First | Last |');
+          lines.push('| --- | ---: | --- | --- |');
+          f.variants.forEach(function (v) {
+            lines.push(
+              '| ' + v.value + (v.canonical ? ' **← proposed**' : '') + ' | ' + num(v.n) + ' | ' +
+                shortDate(v.first) + ' | ' + shortDate(v.last) + ' |'
+            );
+          });
+        }
+        if (f.evidence && f.evidence.items && f.evidence.items.length) {
+          lines.push('');
+          lines.push('**' + f.evidence.title + '**');
+          lines.push('');
+          f.evidence.items.slice(0, RULES.maxEvidence).forEach(function (item) {
+            lines.push('- ' + item.a + ' — ' + item.b);
+          });
+          if (f.evidence.items.length > RULES.maxEvidence) {
+            lines.push('- … and ' + num(f.evidence.items.length - RULES.maxEvidence) + ' more');
+          }
+        }
+        if (f.table) {
+          lines.push('');
+          lines.push('| ' + f.table.headers.join(' | ') + ' |');
+          lines.push('|' + f.table.headers.map(function () { return ' --- '; }).join('|') + '|');
+          f.table.rows.slice(0, 60).forEach(function (row) {
+            lines.push('| ' + row.map(function (c) { return String(c == null ? '' : c).replace(/\|/g, '\\|'); }).join(' | ') + ' |');
+          });
+          if (f.table.rows.length > 60) {
+            lines.push('| … | | | |');
+            lines.push('');
+            lines.push('_(' + num(f.table.rows.length) + ' rows in total; the rest are in the HTML report)_');
+          }
+          if (f.table.note) {
+            lines.push('');
+            lines.push('_' + f.table.note + '_');
+          }
+        }
+        if (f.alternatives && f.alternatives.length) {
+          lines.push('');
+          lines.push(
+            '**Alternatives:** ' +
+              f.alternatives.map(function (a) { return a.value + ' (' + a.reason + ')'; }).join(' · ')
+          );
+        }
+        if (f.howTo) {
+          lines.push('');
+          lines.push('**How to do it in Last.fm:** ' + f.howTo);
+        }
+        lines.push('');
+      });
+    });
+    if (m.warnings && m.warnings.length) {
+      lines.push('## Reading warnings');
+      lines.push('');
+      m.warnings.forEach(function (w) {
+        lines.push('- ' + w);
+      });
+      lines.push('');
+    }
+    lines.push('---');
+    lines.push('');
+    lines.push('_Produced by Last.fm Lens ' + VERSION + ' (src/engine.js). Rules used: `' + JSON.stringify(m.rules) + '`_');
+    return lines.join('\n');
+  }
+
+  return {
+    VERSION: VERSION,
+    RULES: RULES,
+    TYPE_LABELS: TYPE_LABELS,
+    TYPE_ORDER: TYPE_ORDER,
+    parseCSV: parseCSV,
+    readCSV: readCSV,
+    analyse: analyse,
+    toMarkdown: toMarkdown,
+    toCSV: toCSV,
+    toJSON: toJSON,
+    util: {
+      key: key,
+      artistKey: artistKey,
+      looseTitleKey: looseTitleKey,
+      strictTitleKey: strictTitleKey,
+      normaliseText: normaliseText,
+      shortDate: shortDate,
+      dateTime: dateTime,
+      num: num,
+      humanDuration: humanDuration,
+      confidence: confidence
+    }
+  };
+});
+</script>
+<script></script>
+<script>
+(function () {
+  'use strict';
+  var L = window.LastfmLens;
+  var report = window.__REPORT__ || null;
+  var decisions = {};
+  var filters = { types: null, confidence: null, text: '', actionableOnly: false, compact: false, sort: 'confidence' };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  try {
+    decisions = JSON.parse(localStorage.getItem('lastfm-lens-decisions') || '{}') || {};
+  } catch (e) { decisions = {}; }
+
+  function saveDecisions() {
+    try { localStorage.setItem('lastfm-lens-decisions', JSON.stringify(decisions)); } catch (e) {}
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /* ---------------- loading the file ---------------- */
+
+  var dropzone = $('dropzone');
+  var fileInput = $('fileInput');
+
+  dropzone.addEventListener('click', function () { fileInput.click(); });
+  ['dragenter', 'dragover'].forEach(function (eventName) {
+    dropzone.addEventListener(eventName, function (e) { e.preventDefault(); dropzone.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (eventName) {
+    dropzone.addEventListener(eventName, function (e) { e.preventDefault(); dropzone.classList.remove('over'); });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) readFile(file);
+  });
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files && fileInput.files[0]) readFile(fileInput.files[0]);
+  });
+
+  function readFile(file) {
+    $('loading').classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = function () {
+      setTimeout(function () {
+        try {
+          analyseText(String(reader.result), file.name);
+        } catch (e) {
+          $('loading').classList.add('hidden');
+          showNotices(['I could not analyse the file: ' + (e && e.message ? e.message : e)]);
+        }
+      }, 30);
+    };
+    reader.onerror = function () {
+      $('loading').classList.add('hidden');
+      showNotices(['I could not read the file.']);
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  function analyseText(text, fileName) {
+    var parsed = L.readCSV(text, fileName);
+    if (!parsed.scrobbles.length) {
+      $('loading').classList.add('hidden');
+      showNotices(['The CSV has no recognisable scrobble rows.']);
+      return;
+    }
+    report = L.analyse(parsed.scrobbles, { warnings: parsed.warnings, source: fileName });
+    $('loading').classList.add('hidden');
+    dropzone.classList.add('hidden');
+    render(report);
+  }
+
+  function showNotices(items) {
+    var box = $('notices');
+    box.classList.remove('hidden');
+    box.innerHTML = '<div class="errors">' + items.map(escapeHtml).join('<br>') + '</div>';
+  }
+
+  /* ---------------- rendering ---------------- */
+
+  function render(data) {
+    $('results').classList.remove('hidden');
+    var m = data.meta;
+    var affectedPct = m.scrobbles ? Math.round(100 * data.summary.affectedScrobbles / m.scrobbles) : 0;
+    var kpis = [
+      { n: L.util.num(m.scrobbles), t: 'scrobbles' },
+      { n: L.util.num(m.artists), t: 'artists' },
+      { n: L.util.num(m.tracks), t: 'tracks' },
+      { n: L.util.num(m.albums), t: 'albums' },
+      { n: L.util.shortDate(m.from) + ' → ' + L.util.shortDate(m.to), t: 'period' },
+      { n: L.util.num(data.summary.affectedScrobbles) + ' (' + affectedPct + '%)', t: 'scrobbles affected', lead: true },
+      { n: L.util.num(data.summary.highConfidenceActions), t: 'high-confidence actions', lead: true },
+      { n: L.util.num(data.summary.findings), t: 'findings in total' }
+    ];
+    $('kpis').innerHTML = kpis.map(function (k) {
+      return '<div class="kpi' + (k.lead ? ' lead' : '') + '"><b>' + escapeHtml(k.n) + '</b><span>' + escapeHtml(k.t) + '</span></div>';
+    }).join('') +
+      (data.summary.omitted
+        ? '<div class="alarm-box" style="grid-column:1/-1">' + L.util.num(data.summary.omitted) +
+          ' low-confidence findings were left out (name similarities or possible typos with no track in common). ' +
+          'They add nothing: looking similar is not proof of anything. The default rule requires at least one ' +
+          'shared track.</div>'
+        : '') +
+      (data.summary.coveredByStronger
+        ? '<div class="warning" style="grid-column:1/-1">' + L.util.num(data.summary.coveredByStronger) +
+          ' duplicate-name finding(s) were folded into a combined-name finding that already proposes the same ' +
+          'rename, so the same artist is not listed twice.</div>'
+        : '');
+
+    if (m.warnings && m.warnings.length) showNotices(m.warnings);
+
+    var chips = [];
+    data.summary.byType.forEach(function (t) {
+      chips.push('<button class="chip" data-type="' + escapeHtml(t.type) + '" aria-pressed="false">' +
+        escapeHtml(t.label) + '<span class="n">' + L.util.num(t.findings) + '</span></button>');
+    });
+    $('typeChips').innerHTML =
+      '<button class="chip" data-type="" aria-pressed="true">Everything<span class="n">' +
+        L.util.num(data.summary.findings) + '</span></button>' +
+      chips.join('') +
+      '<span style="flex:1"></span>' +
+      ['high', 'medium', 'low'].map(function (level) {
+        return '<button class="chip" data-confidence="' + level + '" aria-pressed="false">' +
+          level.charAt(0).toUpperCase() + level.slice(1) + '</button>';
+      }).join('');
+
+    $('typeChips').addEventListener('click', function (e) {
+      var button = e.target.closest('button.chip');
+      if (!button) return;
+      if (button.dataset.type !== undefined) {
+        filters.types = button.dataset.type ? [button.dataset.type] : null;
+      }
+      if (button.dataset.confidence) {
+        filters.confidence = filters.confidence === button.dataset.confidence ? null : button.dataset.confidence;
+      }
+      Array.prototype.forEach.call($('typeChips').querySelectorAll('.chip'), function (chip) {
+        if (chip.dataset.confidence) {
+          chip.setAttribute('aria-pressed', String(filters.confidence === chip.dataset.confidence));
+        } else if (chip.dataset.type !== undefined) {
+          var active = filters.types ? filters.types[0] === chip.dataset.type : chip.dataset.type === '';
+          chip.setAttribute('aria-pressed', String(active));
+        }
+      });
+      renderList();
+    });
+
+    $('search').addEventListener('input', function () {
+      filters.text = this.value.trim().toLowerCase();
+      renderList();
+    });
+    $('sort').addEventListener('change', function () {
+      filters.sort = this.value;
+      renderList();
+    });
+    $('actionableOnly').addEventListener('click', function () {
+      filters.actionableOnly = !filters.actionableOnly;
+      this.setAttribute('aria-pressed', String(filters.actionableOnly));
+      renderList();
+    });
+    $('compact').addEventListener('click', function () {
+      filters.compact = !filters.compact;
+      this.setAttribute('aria-pressed', String(filters.compact));
+      renderList();
+    });
+    $('printButton').addEventListener('click', function () { window.print(); });
+    $('downloadMarkdown').addEventListener('click', function () {
+      download('lastfm-report.md', L.toMarkdown(report), 'text/markdown');
+    });
+    $('downloadCsv').addEventListener('click', function () {
+      download('lastfm-actions.csv', decisionsCsv(), 'text/csv');
+    });
+    $('downloadJson').addEventListener('click', function () {
+      download('lastfm-report.json', L.toJSON(report), 'application/json');
+    });
+
+    renderList();
+  }
+
+  function download(name, contents, type) {
+    var blob = new Blob([contents], { type: type + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /** Actions CSV with the `decision` column already filled in from the interface. */
+  function decisionsCsv() {
+    var parts = L.toCSV(report).split('\n');
+    var header = parts[0].split(';');
+    var decisionColumn = header.indexOf('decision');
+    var rows = [parts[0]];
+    for (var i = 1; i < parts.length; i++) {
+      var line = parts[i];
+      if (!line) continue;
+      var columns = splitCsvLine(line);
+      var decision = decisions[report.findings[i - 1].id] || 'pending';
+      if (decision === 'discard') continue;
+      columns[decisionColumn] = decision;
+      rows.push(columns.map(csvEscape).join(';'));
+    }
+    return rows.join('\n');
+  }
+
+  function csvEscape(v) {
+    var s = v == null ? '' : String(v);
+    return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function splitCsvLine(line) {
+    var out = [];
+    var field = '';
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (line[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+        } else field += c;
+      } else if (c === '"') inQuotes = true;
+      else if (c === ';') { out.push(field); field = ''; }
+      else field += c;
+    }
+    out.push(field);
+    return out;
+  }
+
+  function passesFilter(f) {
+    if (filters.types && filters.types.indexOf(f.type) < 0) return false;
+    if (filters.confidence && f.confidence !== filters.confidence) return false;
+    if (filters.actionableOnly && f.action === 'review') return false;
+    if (decisions[f.id] === 'discard') return false;
+    if (filters.text) {
+      var haystack = [f.title, f.current, f.proposed, f.explanation].join(' ').toLowerCase();
+      if (haystack.indexOf(filters.text) < 0) return false;
+    }
+    return true;
+  }
+
+  function renderList() {
+    var visible = report.findings.filter(passesFilter);
+    if (filters.sort === 'impact') {
+      visible.sort(function (a, b) { return b.impact - a.impact || b.points - a.points; });
+    } else if (filters.sort === 'type') {
+      visible.sort(function (a, b) {
+        return L.TYPE_ORDER.indexOf(a.type) - L.TYPE_ORDER.indexOf(b.type) || b.impact - a.impact;
+      });
+    }
+    var byType = {};
+    visible.forEach(function (f) {
+      (byType[f.type] = byType[f.type] || []).push(f);
+    });
+    var html = [];
+    L.TYPE_ORDER.forEach(function (type) {
+      var findings = byType[type];
+      if (!findings || !findings.length) return;
+      var impact = findings.reduce(function (a, f) { return a + f.impact; }, 0);
+      var actionable = findings.filter(function (f) { return f.action !== 'review'; }).length;
+      html.push('<section class="group"><h2>' + escapeHtml(L.TYPE_LABELS[type]) +
+        ' <span class="group-summary">— ' + L.util.num(findings.length) + ' finding(s), ' +
+        L.util.num(actionable) + ' actionable, ' + L.util.num(impact) + ' scrobbles affected</span></h2>');
+      var compact = filters.compact || findings.length > 25;
+      if (compact) {
+        html.push('<div class="compact-list">');
+        findings.forEach(function (f) {
+          html.push('<div class="compact-row" data-open="' + escapeHtml(f.id) + '">' +
+            '<span class="tag e-' + f.confidence + '">' + f.confidence + '</span>' +
+            '<span class="t">' + escapeHtml(f.title) + '</span>' +
+            '<span class="i">' + L.util.num(f.impact) + ' sc.</span></div>' +
+            '<div class="hidden">' + card(f) + '</div>');
+        });
+        html.push('</div>');
+      } else {
+        findings.forEach(function (f) { html.push(card(f)); });
+      }
+      html.push('</section>');
+    });
+    if (!visible.length) html.push('<p class="note">Nothing to show with these filters.</p>');
+    $('list').innerHTML = html.join('');
+    $('filterState').textContent = visible.length + ' of ' + report.summary.findings + ' findings visible';
+  }
+
+  function card(f) {
+    var state = decisions[f.id] || 'pending';
+    var className = state === 'discard' ? ' discarded' : state === 'accept' ? ' accepted' : '';
+    var html = [];
+    html.push('<article class="card' + className + '" id="f-' + escapeHtml(f.id) + '">');
+    html.push('<h3>' + escapeHtml(f.title) + '</h3>');
+    html.push('<div class="tags">');
+    html.push('<span class="tag e-' + f.confidence + '">' + f.confidence + ' · ' + f.points + '/100</span>');
+    if (f.impact) html.push('<span class="tag e-info">' + L.util.num(f.impact) + ' scrobbles</span>');
+    html.push('<span class="tag e-info">' + escapeHtml(f.actionLabel) + '</span>');
+    if (f.subtype) html.push('<span class="tag e-info">' + escapeHtml(f.subtype) + '</span>');
+    html.push('</div>');
+
+    if (f.current || f.proposed) {
+      html.push('<div class="action-box"><span class="old">' + escapeHtml(f.current || '—') + '</span>' +
+        ' <span class="arrow">→</span> <span class="new">' + escapeHtml(f.proposed || '—') + '</span></div>');
+    }
+    var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
+    if (alarms.length) {
+      html.push('<div class="alarm-box">Careful: ' + escapeHtml(alarms[0].text) + '</div>');
+    }
+    if (f.signals.length) {
+      html.push('<ul class="signals">' + f.signals.map(function (s) {
+        return '<li class="' + escapeHtml(s.level) + '">' + escapeHtml(s.text) + '</li>';
+      }).join('') + '</ul>');
+    }
+    if (f.explanation) html.push('<p class="explanation">' + escapeHtml(f.explanation) + '</p>');
+    if (f.warning) html.push('<div class="warning">⚠️ ' + escapeHtml(f.warning) + '</div>');
+
+    if (f.variants && f.variants.length) {
+      html.push('<details open><summary>' + escapeHtml(f.variantsTitle || 'Entries that would be merged') + '</summary><table class="data">' +
+        '<tr><th>Name</th><th class="num">Scrobbles</th><th>First</th><th>Last</th></tr>' +
+        f.variants.map(function (v) {
+          return '<tr class="' + (v.canonical ? 'canonical' : '') + '"><td>' + escapeHtml(v.value) +
+            (v.canonical ? ' ← proposed' : '') + '</td><td class="num">' + L.util.num(v.n) +
+            '</td><td>' + escapeHtml(L.util.shortDate(v.first)) + '</td><td>' + escapeHtml(L.util.shortDate(v.last)) + '</td></tr>';
+        }).join('') + '</table></details>');
+    }
+
+    if (f.evidence && f.evidence.items && f.evidence.items.length) {
+      html.push('<details><summary>' + escapeHtml(f.evidence.title) + ' (' + f.evidence.items.length + ')</summary>' +
+        '<div class="scroller"><table class="data"><tr><th>Item</th><th>Detail</th></tr>' +
+        f.evidence.items.map(function (item) {
+          return '<tr><td>' + escapeHtml(item.a) + '</td><td>' + escapeHtml(item.b) + '</td></tr>';
+        }).join('') + '</table></div></details>');
+    }
+    if (f.table) {
+      html.push('<details><summary>' + escapeHtml(f.table.headers.join(' · ')) + '</summary><div class="scroller"><table class="data"><tr>' +
+        f.table.headers.map(function (h) { return '<th>' + escapeHtml(h) + '</th>'; }).join('') + '</tr>' +
+        f.table.rows.map(function (row) {
+          return '<tr>' + row.map(function (c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</table></div>' +
+        (f.table.note ? '<p class="note">' + escapeHtml(f.table.note) + '</p>' : '') + '</details>');
+    }
+    if (f.alternatives && f.alternatives.length) {
+      html.push('<p class="note"><strong>Alternatives:</strong> ' + f.alternatives.map(function (a) {
+        return escapeHtml(a.value) + ' <span style="opacity:.7">(' + escapeHtml(a.reason) + ')</span>';
+      }).join(' · ') + '</p>');
+    }
+    if (f.howTo) {
+      html.push('<details><summary>How to do it in Last.fm</summary><p class="note">' + escapeHtml(f.howTo) + '</p></details>');
+    }
+    html.push('<div class="decisions">' +
+      '<button class="button" data-action="accept" data-id="' + escapeHtml(f.id) + '"' +
+      (state === 'accept' ? ' disabled' : '') + '>✓ Accept</button>' +
+      '<button class="button" data-action="discard" data-id="' + escapeHtml(f.id) + '"' +
+      (state === 'discard' ? ' disabled' : '') + '>✗ Discard</button>' +
+      (state !== 'pending' ? '<button class="button" data-action="pending" data-id="' + escapeHtml(f.id) + '">↺ Back to pending</button>' : '') +
+      '<span class="state">' + (state === 'accept' ? 'marked to do' : state === 'discard' ? 'discarded (will not appear in the CSV)' : 'undecided') + '</span>' +
+      '</div>');
+    html.push('</article>');
+    return html.join('');
+  }
+
+  document.addEventListener('click', function (e) {
+    var button = e.target.closest('button[data-action]');
+    if (button) {
+      var id = button.dataset.id;
+      if (button.dataset.action === 'pending') delete decisions[id];
+      else decisions[id] = button.dataset.action;
+      saveDecisions();
+      var cardElement = document.getElementById('f-' + id);
+      var finding = null;
+      for (var i = 0; i < report.findings.length && !finding; i++) {
+        if (report.findings[i].id === id) finding = report.findings[i];
+      }
+      if (cardElement && finding) cardElement.outerHTML = card(finding);
+      return;
+    }
+    var row = e.target.closest('.compact-row[data-open]');
+    if (row && row.nextElementSibling) row.nextElementSibling.classList.toggle('hidden');
+  });
+
+  /* ---------------- start-up ---------------- */
+
+  if (report) {
+    dropzone.classList.add('hidden');
+    render(report);
+  }
+})();
+</script>
+</body>
+</html>
