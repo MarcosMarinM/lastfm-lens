@@ -51,6 +51,13 @@ function write(name, contents) {
 module.exports = { build, write };
 
 if (require.main === module) {
+  const { checkDocs } = require('./check-docs.js');
+  const problems = checkDocs();
+  if (problems.length) {
+    console.error('The documentation is out of step with the engine:');
+    problems.forEach((problem) => console.error('  - ' + problem));
+    process.exit(1);
+  }
   const html = build({});
   const target = write('index.html', html);
   console.log('Wrote ' + target + ' (' + Math.round(html.length / 1024) + ' KB)');

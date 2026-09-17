@@ -97,11 +97,22 @@
   }
   .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
   .chip .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  /*
+   * A section chip is a switch, not a radio button: clicking it takes that section
+   * out of the list (and clicking it again brings it back). A section that is off
+   * has to look unmistakably off, or “why is my list shorter than yesterday?” has
+   * no answer on screen.
+   */
+  .chip.off { opacity: .45; border-style: dashed; }
+  .chip.off .label { text-decoration: line-through; }
+  /* Escape hatch in the heading of the flat sort modes, where no section heading
+     is drawn and a switched-off section would otherwise only show as a dimmed chip. */
+  .group-summary .button { font-size: 12px; padding: 2px 9px; margin-left: 6px; vertical-align: middle; }
   input[type=search], select {
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit;
   }
-  input[type=search] { min-width: 240px; flex: 1; }
+  input[type=search] { min-width: 200px; flex: 1 1 200px; }
   .button {
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; font-family: inherit;
@@ -118,7 +129,7 @@
   }
   .card.discarded { opacity: .45; }
   .card.accepted { border-color: var(--high); box-shadow: inset 3px 0 0 var(--high); }
-  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card h4 { margin: 0 0 6px; font-size: 16px; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
   .tag {
     font-size: 11.5px; border-radius: 999px; padding: 3px 9px; border: 1px solid transparent;
@@ -170,7 +181,53 @@
   .compact-row:hover { background: var(--page); }
   .compact-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .compact-row .i { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* A compact row can be decided without opening it. */
+  .compact-row .quick {
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border-radius: 6px; padding: 1px 7px; font-size: 12px; line-height: 1.5;
+    cursor: pointer; font-family: inherit;
+  }
+  .compact-row .quick:hover { border-color: var(--accent); color: var(--accent); }
+  .compact-row.accepted .quick[data-action="accept"],
+  .compact-row.discarded .quick[data-action="discard"] { opacity: .3; }
+  /* Downloads live in a menu so the sticky bar stays two rows tall. */
+  .menu { position: relative; margin-left: auto; }
+  .menu > summary { list-style: none; }
+  .menu > summary::-webkit-details-marker { display: none; }
+  .menu > summary::after { content: " ▾"; }
+  .menu[open] > summary::after { content: " ▴"; }
+  .menu-body {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .18); width: min(560px, 92vw);
+  }
+  .menu-body .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .compact-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .compact-row.accepted { box-shadow: inset 3px 0 0 var(--high); }
+  .compact-row.discarded { opacity: .45; }
+  .compact-detail { padding: 6px 10px 12px; background: var(--page); border-bottom: 1px solid var(--border); }
+  section.group h3.subtype {
+    font-size: 12.5px; margin: 18px 0 8px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  section.group h3.subtype .n { font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .rowlabel {
+    color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+    min-width: 5.6rem;
+  }
+  /*
+   * Two variants on purpose. `flex: 1` here means `flex-basis: 0`, so a chip group
+   * sharing a crowded row was squeezed to no width at all, the chips overflowed
+   * their box and ended up underneath the search field. The group that has to give
+   * way is the one that can wrap safely, never the one next to a control.
+   */
+  .chiplist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+  .chiplist.grow { flex: 1 1 auto; }
+  .chiplist.fixed { flex: 0 0 auto; }
+  .note-box {
+    grid-column: 1/-1; background: var(--low-bg); color: var(--muted);
+    border-radius: 8px; padding: 8px 10px; font-size: 13.5px;
+  }
   .hidden { display: none !important; }
   .help h3 { font-size: 15px; margin: 16px 0 4px; }
   .help ul { margin: 4px 0; padding-left: 20px; }
@@ -179,7 +236,7 @@
   .errors { color: var(--alarm); font-size: 13.5px; }
   .loading { text-align: center; padding: 30px; color: var(--muted); }
   @media print {
-    .toolbar, .decisions, #dropzone, .button { display: none !important; }
+    .toolbar, .decisions, #dropzone, .button, .quick { display: none !important; }
     body { background: #fff; }
     .card { break-inside: avoid; }
   }
@@ -191,8 +248,9 @@
   <h1>Last.fm <span class="lens">Lens</span></h1>
   <p class="tagline">
     A magnifier for tidying up scrobbles: duplicate artists, combined artist names, inconsistent track
-    titles, missing or clashing albums, duplicate scrobbles and long-tail oddities. <strong>It edits
-    nothing:</strong> it tells you what to look at, with the evidence in plain sight.
+    titles (including likely typos), artist names repeated inside titles, missing or clashing albums,
+    duplicate scrobbles and long-tail oddities. <strong>It edits nothing:</strong> it tells you what to
+    look at, with the evidence in plain sight.
   </p>
 </header>
 
@@ -211,23 +269,46 @@
     <div class="kpis" id="kpis"></div>
 
     <div class="toolbar">
-      <div class="row" id="typeChips"></div>
-      <div class="row" style="margin-top:8px">
-        <input type="search" id="search" placeholder="Search artist, track, album…">
-        <select id="sort">
-          <option value="confidence">Sort: confidence and impact</option>
-          <option value="impact">Sort: impact</option>
-          <option value="type">Sort: category</option>
-        </select>
-        <button class="button" id="actionableOnly" aria-pressed="false">Actionable only</button>
-        <button class="button" id="compact" aria-pressed="false">Compact view</button>
+      <div class="row">
+        <span class="rowlabel" id="sectionLabel" title="Click a section to hide it, click it again to show it">Section</span>
+        <span class="chiplist grow" id="typeChips" role="group" aria-labelledby="sectionLabel"></span>
+        <span class="note" id="filterState"></span>
       </div>
       <div class="row" style="margin-top:8px">
-        <button class="button primary" id="downloadMarkdown">Download report.md</button>
-        <button class="button" id="downloadCsv">Download actions.csv</button>
-        <button class="button" id="downloadJson">Download JSON</button>
-        <button class="button" id="printButton">Print / PDF</button>
-        <span class="note" id="filterState"></span>
+        <span class="rowlabel" id="confidenceLabel">Confidence</span>
+        <span class="chiplist fixed" id="confidenceChips" role="group" aria-labelledby="confidenceLabel"></span>
+        <input type="search" id="search" placeholder="Search artist, track, album, evidence…">
+        <select id="sort" title="Grouped by category keeps the sections; the other two give one flat list">
+          <option value="category">Sort: grouped</option>
+          <option value="impact">Sort: by impact</option>
+          <option value="confidence">Sort: by confidence</option>
+        </select>
+        <select id="density" title="How much of each finding is shown">
+          <option value="auto">Density: auto</option>
+          <option value="compact">Density: compact</option>
+          <option value="full">Density: expanded</option>
+        </select>
+        <button class="button" id="actionableOnly" aria-pressed="false">Actionable only</button>
+        <details class="menu">
+          <summary class="button">Downloads &amp; help</summary>
+          <div class="menu-body">
+            <div class="row">
+              <button class="button primary" id="downloadWorklist">Download to-do list</button>
+              <button class="button" id="downloadMarkdown">Download report.md</button>
+              <button class="button" id="downloadCsv">Download actions.csv</button>
+              <button class="button" id="downloadJson">Download JSON</button>
+              <button class="button" id="printButton">Print / PDF</button>
+              <button class="button" id="resetDecisions">↺ Reset all decisions</button>
+            </div>
+            <p class="note" style="margin:10px 0 0">
+              ✓ <strong>Accept</strong> puts a finding in your to-do list · ✗ <strong>Discard</strong>
+              hides it here and drops it from <code>actions.csv</code> · ↺ undoes either one · neither of
+              them touches your Last.fm account.<br>
+              <em>auto</em> density shows the long groups as one line each, and those lines carry their own
+              ✓ / ✗ so a finding can be decided without opening it.
+            </p>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -248,19 +329,51 @@
       </p>
       <h3>Evidence rule</h3>
       <ul>
-        <li><strong>Sharing a track is required.</strong> An artist duplicate is only proposed when the two
-            names share at least one track, or when the names are identical bar capitalisation, accents or
-            punctuation. Looking similar on its own (starting with “Franc…”, say) never generates a finding.</li>
-        <li>Weak pairs are omitted and counted in the summary, so you always know what was left out. They can be
-            brought back with <code>minimumConfidence: 'low'</code>. Findings folded into a stronger one are
-            counted in the summary too, so nothing disappears quietly.</li>
+        <li><strong>Sharing a track is the strong proof.</strong> An artist rename is only proposed as work to
+            do when the two names share at least one track, or when they are identical bar capitalisation,
+            accents or punctuation. Looking similar is not proof on its own, so a pair of names that are alike
+            character by character but share <strong>no</strong> track is only ever an advisory question, never
+            a rename to do. The old “they start with the same letters” rule was deleted: it produced pairs
+            like <em>Clara Bell</em> / <em>Claudia Belmonte</em>.</li>
+        <li><strong>Confidence bands:</strong> high from <code>60</code> points, medium from <code>40</code>,
+            low below that (<code>RULES.highThreshold</code> / <code>RULES.mediumThreshold</code> in
+            <code>src/engine.js</code>).</li>
+        <li><strong>Order:</strong> inside a section the findings are grouped by sub-case, and the groups are
+            ordered by their strongest finding, so the highest-scoring ones come first. Within a group the
+            order is confidence, then impact, then points. The other two sort modes replace the sections with
+            a single flat list ordered by impact or by confidence.</li>
+        <li><strong>Nothing is dropped in silence.</strong> Checks that are made and not listed are counted in
+            the summary at the top: artist-name pairs with no track in common, album clashes below the minimum
+            impact, album-name variants past the cap, and findings under the minimum confidence. The last group
+            can be brought back with <code>minimumConfidence: 'low'</code>.</li>
+        <li><strong>Each section can be switched off.</strong> The section chips are switches, not a single
+            choice: click one to take that section out of the list (<em>Duplicate scrobbles</em>, say), click
+            it again to bring it back, and “Everything” switches them all back on. A section that is off is
+            dimmed and struck through. It matters most in the two flat sort modes, where the sections are not
+            drawn at all and the dimmed chip is the only sign that one is missing. The choice is remembered per
+            report, next to your Accept / Discard marks. In the two flat sort modes, where the sections are
+            not drawn, the heading names the sections that are off and carries a “Show them” button.</li>
+        <li><strong>Advisory findings are marked.</strong> Some cards say “this may well be correct, ignore it”
+            (a single and an album are different releases, or a live recording and the studio one, for
+            instance). They are labelled <em>advisory</em> and “Actionable only” hides them, so the count of
+            things to do stays honest.</li>
       </ul>
       <h3>What each section looks at</h3>
       <ul>
         <li><strong>Duplicate artists:</strong> two names pointing at the same artist. The strong proof is
             sharing tracks: if every track under “Ana” also sits under “Ana Beltrán”, it is almost certainly
             the same entry. It also counts whether their scrobbles mix within the same sitting (less than ten
-            minutes apart).</li>
+            minutes apart). Sub-cases: <em>identical names bar formatting</em>, <em>one name contained in the
+            other</em>, <em>several forms of the same artist</em>, <em>very similar names that share
+            tracks</em> and <em>very similar names with no shared track</em>.
+            The last two also compare the two names character by character, because a misspelling with more
+            than a couple of scrobbles used to be invisible: “Jana Burčeska” against “Jana Burcheska” is
+            proposed when they share a track, and merely asked about when they do not. Two names that differ
+            only by an underscore, a double space or a comma (“Senza_Cri” against “Senza Cri”) are identical
+            as far as the engine is concerned, so they need no threshold at all.
+            It also catches an abbreviation, where one name is the beginning of the other and every other
+            word is the same (“Cris Lora” against “Cristina Lora”), while keeping out pairs like “Clara
+            Bell” / “Claudia Belmonte”, where two words differ at once.</li>
         <li><strong>Combined artists:</strong> names such as “Ana, Bruno Salas y Cata”. These are flagged
             only when the <strong>first</strong> artist of the name exists separately in your library, and the
             proposal is exactly that first one (“Ana”). If the first one does not exist, the first that does is
@@ -272,12 +385,52 @@
             stands for. That is why “Ana Bruno” points at “Ana” and never at “Ana, Bruno”, and why a name already
             covered by a combined-name finding produces only one card rather than two saying the same thing.</li>
         <li><strong>Inconsistent track titles:</strong> the same track written in several ways under the same
-            artist (capitalisation, “(X)” versus “- X”, with or without a <code>feat.</code> credit).</li>
-        <li><strong>Albums:</strong> albums missing on some scrobbles but present on others, the same title split
-            across several albums (single versus album), and albums spelled in several ways.</li>
-        <li><strong>Duplicate scrobbles:</strong> the same track twice in a row less than a minute apart.</li>
-        <li><strong>Long tail:</strong> artists with one or two scrobbles, likely typos, garbled characters or
-            odd spacing.</li>
+            artist. Sub-cases: <em>formatting only</em>, <em>capitalisation only</em>, <em>qualifier written differently</em>, <em>featuring
+            credit in one form only</em>, <em>probably a typo in the title</em>, <em>titles carrying a platform
+            badge</em>, <em>probably a different
+            version (live, remix…)</em>, <em>with and without a qualifier</em>, <em>different
+            qualifiers</em>.
+            A platform badge is the junk a video page adds to an upload: “Song (Official Video)”, “Song
+            (Official Audio)”, “Song (Lyric Video)”, “Song (Video Oficial)”, “Song (Audio)”. It is worth a card
+            of its own because it points at where the scrobble came from — YouTube or Vevo rather than a music
+            player — and because it is invisible when <em>every</em> scrobble of a track carries it. The proposal
+            only ever removes the badge, never adds a credit, and the badge check is strict: the whole qualifier
+            has to be the badge, so real credits such as “from the Prime Video Original Movie” or “Official Song
+            UEFA Euro 2016” stay where they are.
+            Capitalisation alone is not damage: a name written twice with different capitals gets its own
+            sub-case, is advisory and never counts as work, because nothing is broken and nothing is lost.
+            An accent that went wrong, a broken quote or a stray space does count: those keep the high score.
+            A qualifier such as live, remix, acoustic or version marks a different recording, so those cases
+            get their own group, are marked <em>advisory</em> (they are decisions to make, not merges to do)
+            and never appear among the plain title variants. Their proposal prefers the plain form as the
+            target, because the qualified one explicitly claims something the others do not.
+            The typo check is deliberately narrow: same artist, both titles starting with the same letter, and
+            only when the rarer spelling is genuinely rare (at most three scrobbles). So “Patata” against
+            “Patataa” or “Papata” is proposed, while “Lugar I” against “Lugar II” is not: numbering is not a
+            typo. It only sees spelling, so the card warns you when a similar name could be a different song.</li>
+        <li><strong>Artist repeated in title:</strong> the Artist field already says “Ana” and the title repeats
+            it (“Ana - Something”). Typical of a badly tagged file or an import. The proposal removes the
+            repeated artist from the title; it only fires when the title really starts with the artist’s name
+            followed by a dash or a colon, so it stays quiet about titles that merely mention it.
+            When the same title also ends with a platform badge (“Ana - Something (Official Video)”), one single
+            card proposes the whole fix, badge included, instead of two cards proposing half a fix each.</li>
+        <li><strong>Albums:</strong> sub-cases <em>no album (another scrobble has one)</em>, <em>album name
+            written in several ways</em>, <em>capitalisation only</em> and <em>several albums for the same
+            title</em>.<br>
+            As with titles, two spellings that differ only in capitalisation are the same album either way, so
+            they are advisory and never counted as work. “Several albums for the same title” may be perfectly
+            correct (the single and the album are different things), so it is advisory too, and never counted
+            as work to do.
+            An album-name variant is only ever proposed <strong>inside one artist</strong>, because an album is
+            an (artist, album) pair: “Amnesia” by one artist and “AMNESIA” by another are two different
+            albums, not two spellings of one, and merging them would rewrite somebody else's album. When the
+            two spellings belong to two spellings of the <em>same</em> artist, that is the duplicate-artist
+            section's business: rename the artist first.</li>
+        <li><strong>Duplicate scrobbles:</strong> the same track twice in a row less than a minute apart. This
+            is the one section where the finding is a near-certainty rather than a suspicion.</li>
+        <li><strong>Long tail and oddities:</strong> sub-cases <em>probably a typo in the artist name</em>,
+            <em>formatting details inside tags</em>, <em>scrobbles with no album</em> and <em>artists with two
+            scrobbles or fewer</em>; the last three are informational lists, not mistakes.</li>
       </ul>
       <h3>What it does NOT do</h3>
       <ul>
@@ -300,7 +453,11 @@
             Last.fm offers to apply it to every scrobble of that combination (and renaming an artist affects the
             whole entry). It is a bulk change: look twice.</li>
         <li>Deleting a duplicate scrobble is one at a time, from the scrobble’s (⋯) menu.</li>
-        <li>Mark items “Accept” or “Discard” here and the actions CSV downloads with your decisions applied.</li>
+        <li><strong>Accept</strong> marks a finding as to do: it gets a green edge and appears in the
+            <strong>to-do list</strong>, which you download with its own button. <strong>Discard</strong> fades
+            the card, stops listing it and drops its row from <code>actions.csv</code>. Both can be undone
+            with “Back to pending”. Neither of them touches your Last.fm account, and the Markdown and JSON
+            downloads do not carry them: those are the report, not your working list.</li>
       </ul>
       <h3>Privacy</h3>
       <ul>
@@ -364,6 +521,25 @@
     // share at least one track, unless the names are identical bar formatting.
     requireSharedTrack: true,
 
+    // Artist names that are nearly the same: a typo or a rename (“Jana Burčeska”
+    // against “Jana Burcheska”, “Marlena” against “Maléna”). Compared character by
+    // character, but narrowly, because looking similar is weak evidence. The
+    // default 0.875 reads “one character in eight, at most”: short names have to
+    // be nearly identical, long ones may differ by two characters. Lowering it
+    // brings in pairs like “Martija” / “Martina”, which are usually two different
+    // artists — that is the pair the old prefix rule used to produce.
+    similarArtistNameThreshold: 0.875,
+    maxSimilarArtistDistance: 2,
+    minArtistLengthForSimilarCompare: 5,
+
+    // “Cris Lora” against “Cristina Lora”: the same number of words, every word
+    // equal except one, and that one is the beginning of the other. The short form
+    // has to be at least minAbbreviationLength characters and the added part at
+    // least minAbbreviationExtension, which is what keeps out “Voyage” /
+    // “Voyager” (one letter apart, and usually two different acts).
+    minAbbreviationLength: 4,
+    minAbbreviationExtension: 2,
+
     // Duplicates: two scrobbles of the same artist+track closer than this
     duplicateWindowMs: 60 * 1000,
     duplicateCertainWindowMs: 15 * 1000,
@@ -378,6 +554,19 @@
     maxScrobblesForRareArtist: 2, // a "rare artist" has <= this many scrobbles
     minScrobblesForTypoCompare: 20, // only compare against artists with >= this
     maxTypoDistance: 2, // edit distance before suspecting a typo
+
+    // Album name variants that differ only in formatting: at most this many are
+    // listed. Anything past the cap is counted in the summary (summary.trimmed),
+    // never dropped in silence.
+    maxAlbumNameVariants: 60,
+
+    // Track titles written almost the same ("Patata" / "Patataa" / "Papata").
+    // Deliberately narrow: same artist, same first letter, and the rarer
+    // spelling has to be genuinely rare, or half the library would pair up.
+    maxTitleTypoDistance: 1, // differ by at most this many characters...
+    maxTitleTypoDistanceWithAlbum: 2, // ...or this many when they share an album
+    maxScrobblesForRareTitle: 3, // the suspect spelling has <= this many scrobbles
+    minTitleLengthForTypoCompare: 4, // never compare titles shorter than this
 
     // Presentation
     maxEvidence: 14, // most evidence items per finding
@@ -403,6 +592,56 @@
     'duplicate_scrobbles',
     'long_tail'
   ];
+
+  /**
+   * Human label for every sub-case a section can emit. The key matches the
+   * `subtype` carried by a finding.
+   *
+   * The order of these keys is only a stable tie-breaker: the report lists the
+   * groups inside a section by how promising their best finding is, so a sub-case
+   * that reaches 75/100 never appears below one that only reaches 52/100.
+   */
+  var SUBTYPE_LABELS = {
+    duplicate_artists: {
+      identical: 'Identical names bar formatting',
+      containment: 'One name contained in the other',
+      group: 'Several forms of the same artist',
+      similar_with_tracks: 'Very similar names that share tracks',
+      similar_names: 'Very similar names with no shared track'
+    },
+    combined_artists: {
+      '': 'Name joining several artists'
+    },
+    title_variants: {
+      case_only: 'Capitalisation only',
+      formatting: 'Formatting only',
+      qualifier_formatting: 'Qualifier written differently',
+      featuring: 'Featuring credit in one form only',
+      typo: 'Probably a typo in the title',
+      platform_badge: 'Titles carrying a platform badge',
+      version_marker: 'Probably a different version (live, remix…)',
+      one_qualified: 'With and without a qualifier',
+      different_qualifiers: 'Different qualifiers'
+    },
+    artist_in_title: {
+      '': 'Artist repeated inside the title'
+    },
+    albums: {
+      missing: 'No album (another scrobble has one)',
+      name_variants: 'Album name written in several ways',
+      case_only: 'Capitalisation only',
+      clash: 'Several albums for the same title'
+    },
+    duplicate_scrobbles: {
+      '': 'Consecutive repeats of the same track'
+    },
+    long_tail: {
+      possible_typo: 'Probably a typo in the artist name',
+      hygiene: 'Formatting details inside tags',
+      empty: 'Scrobbles with no album',
+      rare_artists: 'Artists with two scrobbles or fewer'
+    }
+  };
 
   var ACTIONS = {
     rename_artist: {
@@ -465,10 +704,27 @@
     },
     review_album: {
       label: 'Review album',
+      // Advisory: it may be perfectly correct (a single and an album are two
+      // different releases), so it does not count as work to do.
+      advisory: true,
       how: function (f) {
         return (
           'The same title appears across ' + num(f.impact) + ' scrobbles split between these albums. ' +
           'If one is the single and the other is the album, that is correct and there is nothing to fix.'
+        );
+      }
+    },
+    review_capitalisation: {
+      label: 'Review capitalisation',
+      // Advisory: the same name with different capitals, so nothing is damaged and
+      // nothing is lost. It is tidying, not a fix, and does not count as work.
+      advisory: true,
+      how: function (f) {
+        return (
+          'Optional tidying: “' + f.current + '” and “' + f.proposed + '” are the same name written ' +
+          'with different capitals. If you want them identical, edit the field to “' + f.proposed +
+          '” and let Last.fm apply it to the ' + num(f.impact) + ' scrobble(s). If you do not care, leave ' +
+          'them: nothing is broken.'
         );
       }
     },
@@ -481,8 +737,38 @@
         );
       }
     },
+    review_artist: {
+      label: 'Review artist name',
+      // Advisory: the names look alike but share no track, so this may well be
+      // two different artists.
+      advisory: true,
+      how: function (f) {
+        return (
+          'Listen to or look up “' + f.current + '” and “' + f.proposed + '” before touching anything: the ' +
+          'names are alike but the scrobbles share no track, which is exactly what two different artists ' +
+          'with similar names look like. If they are the same, open a scrobble of “' + f.current +
+          '”, edit the Artist field to “' + f.proposed + '” and let Last.fm apply it to the ' +
+          num(f.impact) + ' scrobble(s).'
+        );
+      }
+    },
+    review_track: {
+      label: 'Review track title',
+      // Advisory: the qualifier probably marks a different recording, so merging
+      // is a decision to make rather than a merge to do.
+      advisory: true,
+      how: function (f) {
+        return (
+          'Compare the ' + num(f.impact) + ' scrobble(s) behind this finding before changing anything: a ' +
+          'qualifier such as live, remix, acoustic or version usually marks a DIFFERENT recording, and ' +
+          'merging it would lose that distinction. If the qualifier is a tagging mistake, edit the Track ' +
+          'field to “' + f.proposed + '”; if the recording really is different, leave both as they are.'
+        );
+      }
+    },
     review: {
       label: 'Review',
+      advisory: true,
       how: function () {
         return 'No automatic action: this one needs your judgement.';
       }
@@ -560,6 +846,54 @@
   /** Loose title key: also drops the featuring credit and any qualifiers. */
   function looseTitleKey(t) {
     return key(stripFeat(titleParts(t).base)) || key(t);
+  }
+
+  /*
+   * Platform badges: the junk a video page adds to a title, so that “Song” becomes
+   * “Song (Official Video)”. Every word of the qualifier has to belong to the
+   * vocabulary and at least one core word has to be there, because a qualifier that
+   * merely CONTAINS one of these words is usually a real credit: “from the Prime
+   * Video original movie”, “Eurovision official version” and “Official Song UEFA
+   * Euro 2016” are all credits, not badges.
+   */
+  var BADGE_WORDS = {
+    official: 1, oficial: 1, audio: 1, video: 1, lyric: 1, lyrics: 1, letra: 1,
+    letras: 1, visual: 1, visuals: 1, visualizer: 1, visualiser: 1, clip: 1,
+    music: 1, full: 1, mv: 1, hd: 1, hq: 1, '4k': 1, '8k': 1
+  };
+  var BADGE_CORE = {
+    official: 1, oficial: 1, audio: 1, video: 1, lyric: 1, lyrics: 1, letra: 1,
+    letras: 1, visual: 1, visuals: 1, visualizer: 1, visualiser: 1, mv: 1, hd: 1,
+    hq: 1, '4k': 1, '8k': 1
+  };
+
+  /**
+   * True when a qualifier is nothing but a platform badge: “Official Video”,
+   * “Audio”, “Lyric Video”, “Video Oficial”, “4K”… It receives the already
+   * normalised qualifier, so accents, case and punctuation are gone by then.
+   */
+  function isPlatformBadge(qualifierKey) {
+    var words = String(qualifierKey || '').split(' ').filter(Boolean);
+    if (!words.length) return false;
+    var core = false;
+    for (var i = 0; i < words.length; i++) {
+      if (!BADGE_WORDS[words[i]]) return false;
+      if (BADGE_CORE[words[i]]) core = true;
+    }
+    return core;
+  }
+
+  /** The title with its platform badges removed, and nothing else touched. */
+  function stripPlatformBadges(raw) {
+    var out = normaliseText(raw).replace(/[\(\[]([^\)\]]*)[\)\]]/g, function (match, inner) {
+      return isPlatformBadge(key(inner)) ? ' ' : match;
+    });
+    for (var i = 0; i < 5; i++) {
+      var m = out.match(/\s+-\s+(.{2,})$/);
+      if (!m || !isPlatformBadge(key(m[1]))) break;
+      out = out.slice(0, m.index);
+    }
+    return normaliseText(out);
   }
 
   /** Words that point to a DIFFERENT recording, not just different formatting. */
@@ -907,7 +1241,11 @@
 
   function buildIndex(scrobbles) {
     var artists = new Map(); // name -> {name, n, key, tracks: Map, timestamps: [], first, last, parts}
-    var albumNames = new Map(); // album key -> Map(raw spelling -> n)
+    // Album spellings are grouped per ARTIST, never across artists: an album page is a
+    // (artist, album) pair, so “SARAH” by Sarah Toscano and “Sarah” by the duplicate
+    // artist “Sarah” are two different albums, not two spellings of one. Merging them
+    // would tell you to rewrite one artist's album into another artist's.
+    var albumNames = new Map(); // artist + album key -> { artist, spellings: Map(raw -> n) }
 
     for (var i = 0; i < scrobbles.length; i++) {
       var s = scrobbles[i];
@@ -943,13 +1281,13 @@
       if (s.album) track.albums.set(s.album, (track.albums.get(s.album) || 0) + 1);
 
       if (s.album) {
-        var albumKey = key(s.album);
-        var spellings = albumNames.get(albumKey);
-        if (!spellings) {
-          spellings = new Map();
-          albumNames.set(albumKey, spellings);
+        var albumKey = s.artist + '\u0000' + key(s.album);
+        var entry = albumNames.get(albumKey);
+        if (!entry) {
+          entry = { artist: s.artist, spellings: new Map() };
+          albumNames.set(albumKey, entry);
         }
-        spellings.set(s.album, (spellings.get(s.album) || 0) + 1);
+        entry.spellings.set(s.album, (entry.spellings.get(s.album) || 0) + 1);
       }
     }
     var list = Array.from(artists.values());
@@ -996,6 +1334,12 @@
     return { text: text, level: level || 'info' };
   }
 
+  /** Human label for a finding's sub-case, or '' when it has none. */
+  function subtypeLabel(type, subtype) {
+    var map = SUBTYPE_LABELS[type];
+    return (map && map[subtype || '']) || '';
+  }
+
   function newFinding(options) {
     var f = {
       id: findingId(options.type + ':' + (options.subtype || ''), options.current || '', options.proposed || ''),
@@ -1019,6 +1363,9 @@
     };
     f.confidence = confidence(f.points);
     var action = ACTIONS[f.action];
+    // An advisory finding ("this may well be correct, ignore it") is not work:
+    // the interface and the summary both use this to tell them apart.
+    f.actionable = !(action && action.advisory);
     f.howTo = action ? action.how(f) : '';
     return f;
   }
@@ -1029,7 +1376,7 @@
 
   /* --- 6.1 Duplicate artists ------------------------------------------------- */
 
-  function detectMergePairs(index) {
+  function detectMergePairs(index, stats) {
     var candidates = [];
     var list = index.list;
     var seen = new Set();
@@ -1044,7 +1391,10 @@
       });
       // One strict rule: either they share a track, or the names are identical
       // bar formatting. A name that merely looks similar never qualifies.
-      if (RULES.requireSharedTrack && relation !== 'identical' && shared === 0) return;
+      if (RULES.requireSharedTrack && relation !== 'identical' && shared === 0) {
+        if (stats) stats.artistPairsWithoutSharedTrack++;
+        return;
+      }
       var minTracks = Math.min(shorter.tracks.size, longer.tracks.size) || 1;
       // The entry with FEWER TRACKS is the one fully covered by the other, which is
       // not always the one with the shorter name: “Ana” is shorter than
@@ -1484,25 +1834,303 @@
     return parts.join(' ');
   }
 
+  /* --- 6.1b Artist names that are almost the same --------------------------- */
+
+  /**
+   * Names that are nearly identical but invisible to the rules above: “Jana
+   * Burčeska” against “Jana Burcheska”, “Marlena” against “Maléna”. The name is
+   * neither identical once normalised nor contained in the other, so nothing used
+   * to look at them at all.
+   *
+   * Two outcomes, and the difference matters:
+   *   - they share a track: that is the engine's strong proof, so it is a rename
+   *     to do (`similar_with_tracks`);
+   *   - they share no track: alike is weak evidence, so it is only a question,
+   *     marked advisory and never counted as work to do (`similar_names`).
+   */
+  function detectSimilarArtistNames(index) {
+    var out = [];
+    var byInitial = new Map();
+    index.list.forEach(function (artist) {
+      if (!artist.key || artist.key.length < RULES.minArtistLengthForSimilarCompare) return;
+      // Combined names are the combined-artist detector's business.
+      if (artist.parts && artist.parts.length > 1) return;
+      var initial = artist.key.slice(0, 1);
+      var bucket = byInitial.get(initial);
+      if (!bucket) {
+        bucket = [];
+        byInitial.set(initial, bucket);
+      }
+      bucket.push(artist);
+    });
+    byInitial.forEach(function (bucket) {
+      for (var x = 0; x < bucket.length; x++) {
+        for (var y = x + 1; y < bucket.length; y++) {
+          var a = bucket[x];
+          var b = bucket[y];
+          if (a.key === b.key) continue; // the identical-name rule already covers it
+          if (containsWord(a.key, b.key) || containsWord(b.key, a.key)) continue; // containment covers it
+          var alike = alikeArtistKeys(a.key, b.key);
+          if (!alike) continue;
+          var similarity = alike.strength;
+
+          var shared = 0;
+          a.tracks.forEach(function (track, k) {
+            if (b.tracks.has(k)) shared++;
+          });
+          var mixing = countTemporalMix(a.timestamps, b.timestamps);
+          var rename = sequentialRename(a, b);
+          var canonical = chooseCanonical([variantOf(a.name, a), variantOf(b.name, b)]);
+          var suspect = canonical.value === a.name ? b : a;
+          var target = canonical.value;
+          var alikePhrase = alikeSentence(alike, similarity);
+          var signals = [
+            signal(
+              cap(alikePhrase),
+              alike.kind === 'abbreviation' || similarity >= 0.9 ? 'strong' : 'medium'
+            )
+          ];
+          if (shared) signals.push(signal('They share ' + num(shared) + ' track(s)', 'strong'));
+          if (mixing) {
+            signals.push(
+              signal(
+                mixing + ' scrobble(s) of one fall within 10 minutes of scrobbles of the other (same sitting)',
+                'strong'
+              )
+            );
+          }
+          if (rename) {
+            signals.push(
+              signal(
+                '“' + rename.from + '” stops on ' + shortDate(rename.end) + ' and “' + rename.to +
+                  '” starts on ' + shortDate(rename.start) + ': that is what a rename looks like',
+                'strong'
+              )
+            );
+          }
+          signals.push(
+            signal('“' + a.name + '” has ' + num(a.n) + ' scrobble(s) and “' + b.name + '” has ' + num(b.n), 'info')
+          );
+
+          var subtype;
+          var action;
+          var points;
+          var warning = '';
+          var explanation;
+          if (shared) {
+            subtype = 'similar_with_tracks';
+            action = 'rename_artist';
+            var minTracks = Math.min(a.tracks.size, b.tracks.size) || 1;
+            var coverage = (shared + 0.5) / (minTracks + 1);
+            points =
+              18 + 30 * coverage + 12 * (Math.min(shared, 20) / 20) +
+              12 * (Math.min(mixing, 10) / 10) + 12 * similarity + (rename ? 6 : 0);
+            if (shared === minTracks && shared > 0) {
+              points += 12;
+              signals.push(
+                signal(
+                  'EVERY track under “' + suspect.name + '” also appears under “' + target + '”',
+                  'alarm'
+                )
+              );
+            }
+            explanation =
+              'Your library has “' + a.name + '” (' + num(a.n) + ' scrobbles) and “' + b.name + '” (' +
+              num(b.n) + ' scrobbles), and ' + alikePhrase + '. They share ' + num(shared) +
+              ' track(s), so this is very probably the same artist written twice. Renaming “' +
+              suspect.name + '” would touch ' + num(suspect.n) + ' scrobble(s).';
+          } else {
+            subtype = 'similar_names';
+            action = 'review_artist';
+            points =
+              22 + 26 * similarity + 10 * (Math.min(mixing, 10) / 10) + (rename ? 8 : 0);
+            warning =
+              'A similar name can be a different artist, and these two share no track at all, so this is ' +
+              'only a question. The engine cannot tell a misspelling from two artists with similar names.';
+            explanation =
+              'Your library has “' + a.name + '” (' + num(a.n) + ' scrobble(s)) and “' + b.name + '” (' +
+              num(b.n) + ' scrobble(s)), and ' + alikePhrase + ', but they share no track. That is what a ' +
+              'misspelling or a rename looks like — and also what two different artists with similar names ' +
+              'look like. If they are the same, the rarer form is usually the mistake.';
+          }
+          var finding = newFinding({
+            type: 'duplicate_artists',
+            subtype: subtype,
+            title: '“' + suspect.name + '” → ' + '“' + target + '”' + (shared ? '' : '?'),
+            points: points,
+            impact: suspect.n,
+            action: action,
+            current: suspect.name,
+            proposed: target,
+            signals: signals,
+            warning: warning,
+            explanation: explanation,
+            evidence: shared
+              ? {
+                  title: 'Tracks present under both names',
+                  items: sharedTrackEvidence(
+                    a.tracks.size <= b.tracks.size ? a : b,
+                    a.tracks.size <= b.tracks.size ? b : a
+                  )
+                }
+              : {
+                  title: 'The two names',
+                  items: [
+                    {
+                      a: '“' + a.name + '”',
+                      b: num(a.n) + ' scrobble(s) · ' + shortDate(a.first) + ' → ' + shortDate(a.last)
+                    },
+                    {
+                      a: '“' + b.name + '”',
+                      b: num(b.n) + ' scrobble(s) · ' + shortDate(b.first) + ' → ' + shortDate(b.last)
+                    },
+                    { a: 'Tracks in common', b: num(shared) }
+                  ]
+                }
+          });
+          finding.__artists = [suspect.name];
+          out.push(finding);
+        }
+      }
+    });
+    return out;
+  }
+
+  /**
+   * How two artist keys are alike, or null when they are not alike enough:
+   *
+   *   { kind: 'ratio', strength, distance }              “Burčeska” / “Burcheska”
+   *   { kind: 'abbreviation', strength, short, long }    “Cris Lora” / “Cristina Lora”
+   *
+   * The abbreviation case is the word-level one: the same number of words, every
+   * word equal except one, and that one is the beginning of the other. Requiring
+   * the *other* words to be identical is what keeps out *Clara Bell* / *Claudia
+   * Belmonte*, where two words differ at once.
+   */
+  function alikeArtistKeys(aKey, bKey) {
+    var shorter = aKey.length <= bKey.length ? aKey : bKey;
+    var longer = shorter === aKey ? bKey : aKey;
+    if (longer.length - shorter.length <= RULES.maxSimilarArtistDistance) {
+      var distance = editDistance(shorter, longer, RULES.maxSimilarArtistDistance);
+      if (distance > 0 && distance <= RULES.maxSimilarArtistDistance) {
+        var similarity = 1 - distance / longer.length;
+        if (similarity >= RULES.similarArtistNameThreshold) {
+          return { kind: 'ratio', strength: similarity, distance: distance };
+        }
+      }
+    }
+    var abbreviation = abbreviationPair(aKey, bKey);
+    if (abbreviation) {
+      return {
+        kind: 'abbreviation',
+        strength: 0.9 + 0.1 * (abbreviation.short.length / abbreviation.long.length),
+        short: abbreviation.short,
+        long: abbreviation.long
+      };
+    }
+    return null;
+  }
+
+  /**
+   * “Cris Lora” against “Cristina Lora”: same number of words, one word is the
+   * beginning of the other and every other word matches. A nickname, in other
+   * words. [] when that is not the shape of the two names.
+   */
+  function abbreviationPair(aKey, bKey) {
+    var a = aKey.split(' ');
+    var b = bKey.split(' ');
+    if (a.length !== b.length) return null;
+    var differing = -1;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] === b[i]) continue;
+      if (differing >= 0) return null; // more than one word differs: not this case
+      differing = i;
+    }
+    if (differing < 0) return null; // identical, another rule covers it
+    var short = a[differing].length <= b[differing].length ? a[differing] : b[differing];
+    var long = short === a[differing] ? b[differing] : a[differing];
+    if (short.length < RULES.minAbbreviationLength) return null;
+    if (long.indexOf(short) !== 0) return null; // not the beginning of the other
+    if (long.length - short.length < RULES.minAbbreviationExtension) return null;
+    return { short: short, long: long };
+  }
+
+  /** Plain-English description of how two names are alike, lower case. */
+  function alikeSentence(alike, strength) {
+    if (alike.kind === 'abbreviation') {
+      return (
+        '“' + alike.short + '” is the beginning of “' + alike.long +
+        '”, with every other word of the two names matching'
+      );
+    }
+    return (
+      'the two names are ' + pct(strength) + ' alike character by character (' + num(alike.distance) +
+      ' character(s) apart)'
+    );
+  }
+
+  function cap(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  /**
+   * A name that stops being used exactly when the other starts: that is what a
+   * rename looks like from the outside. [] when their dates overlap or are unknown.
+   */
+  function sequentialRename(a, b) {
+    if (isNaN(a.first) || isNaN(b.first)) return null;
+    var older;
+    var newer;
+    if (a.last <= b.first) {
+      older = a;
+      newer = b;
+    } else if (b.last <= a.first) {
+      older = b;
+      newer = a;
+    } else {
+      return null;
+    }
+    return { from: older.name, to: newer.name, end: older.last, start: newer.first };
+  }
+
   /* --- 6.2 Artist repeated inside the track title ---------------------------- */
+
+  /**
+   * A title that starts by repeating the artist name (“Nina — Nina - Amame”) carries
+   * the real title after the separator. Returns that leftover, or null when the
+   * title does not repeat the artist.
+   *
+   * The badge detector calls this too, so that the two can never both claim the same
+   * title: a title repeating the artist belongs to this detector alone.
+   */
+  function titleRepeatsArtist(artistName, rawTitle) {
+    if (!artistName || !rawTitle) return null;
+    var aKey = artistKey(artistName);
+    if (aKey.length < 3) return null;
+    var title = normaliseText(rawTitle);
+    if (key(title).indexOf(aKey + ' ') !== 0) return null;
+    var rest = title.slice(artistName.length);
+    if (!/^\s*[-–—:]\s*\S/.test(rest)) return null;
+    return normaliseText(rest.replace(/^\s*[-–—:]\s*/, '')) || null;
+  }
 
   function detectArtistInTitle(scrobbles) {
     var groups = new Map();
     for (var i = 0; i < scrobbles.length; i++) {
       var s = scrobbles[i];
-      if (!s.artist || !s.title) continue;
-      var aKey = artistKey(s.artist);
-      if (aKey.length < 3) continue;
-      var rawTitle = normaliseText(s.title);
-      if (key(rawTitle).indexOf(aKey + ' ') !== 0) continue;
-      var rest = rawTitle.slice(s.artist.length);
-      if (!/^\s*[-–—:]\s*\S/.test(rest)) continue;
-      var cleaned = normaliseText(rest.replace(/^\s*[-–—:]\s*/, ''));
+      var cleaned = titleRepeatsArtist(s.artist, s.title);
       if (!cleaned) continue;
+      // The leftover often ends with a platform badge as well (“Nina - Amame
+      // (Official Video)”), and the badge detector deliberately leaves these titles
+      // to this one. So this is where the whole fix belongs: strip the artist name
+      // AND the badge, instead of leaving two cards proposing half a fix each.
+      var debadged = stripPlatformBadges(cleaned);
+      var hadBadge = !!debadged && debadged !== cleaned;
+      if (hadBadge) cleaned = debadged;
       var groupKey = s.artist + '\u0000' + s.title;
       var group = groups.get(groupKey);
       if (!group) {
-        group = { artist: s.artist, current: s.title, proposed: cleaned, n: 0 };
+        group = { artist: s.artist, current: s.title, proposed: cleaned, n: 0, hadBadge: hadBadge };
         groups.set(groupKey, group);
       }
       group.n++;
@@ -1521,11 +2149,19 @@
         proposed: group.proposed,
         signals: [
           signal('The title starts with the artist name and repeats it', 'strong'),
+          group.hadBadge
+            ? signal('It also ends with a platform badge (“Official Video”, “Audio”…)', 'strong')
+            : null,
           signal(num(group.n) + ' scrobble(s) with this form', 'medium')
-        ],
+        ].filter(Boolean),
         explanation:
           'The Artist field already says “' + group.artist + '”, yet the title repeats it. That is typical ' +
-          'of a badly tagged file or an import. Proposal: leave the title as “' + group.proposed + '”.',
+          'of a badly tagged file or a scrobble taken from a video page. Proposal: leave the title as “' +
+          group.proposed + '”.' +
+          (group.hadBadge
+            ? ' The tail with the platform badge (“Official Video”, “Audio”…) goes away with it: that is ' +
+              'what a video page adds to the upload, not the name of the track.'
+            : ''),
         evidence: { title: 'Full form', items: [{ a: group.current, b: num(group.n) + ' scrobbles' }] }
       });
       finding.__variants = [[group.artist, group.current]];
@@ -1746,15 +2382,26 @@
     byArtist.forEach(function (tracks, artist) {
       tracks.forEach(function (spellings) {
         if (spellings.size < 2) return;
-        var variants = [];
+        var allSpellings = [];
         spellings.forEach(function (n, raw) {
-          variants.push({
+          var qualifiers = qualifiersOf(raw);
+          allSpellings.push({
             value: raw,
             n: n,
             strict: strictTitleKey(raw),
-            qualifiers: qualifiersOf(raw),
-            differentVersion: RE_DIFFERENT_VERSION.test(key(raw))
+            qualifiers: qualifiers,
+            differentVersion: RE_DIFFERENT_VERSION.test(key(raw)),
+            platformBadge: qualifiers.split(' | ').some(isPlatformBadge)
           });
+        });
+        // A spelling that is nothing but a platform badge (“(Official Video)”,
+        // “- Audio”) is not a title variant: the badge detector owns those and
+        // proposes to strip the badge. Keeping them out of this comparison means a
+        // track is never reported twice, and that “Song” against
+        // “Song (Official Video)” no longer reads as an ordinary with/without
+        // qualifier case.
+        var variants = allSpellings.filter(function (v) {
+          return !v.platformBadge;
         });
         if (variants.length < 2) return;
         var strictKeys = new Set(variants.map(function (v) { return v.strict; }));
@@ -1780,6 +2427,8 @@
         var signals = [];
         var warning = '';
         var subtype;
+        var action = 'rename_track';
+        var caseOnly = false;
         if (featuringOnly && strictKeys.size > 1) {
           subtype = 'featuring';
           points = 55;
@@ -1790,31 +2439,63 @@
             'In Last.fm the featuring credit usually stays in the title ONLY if the main artist does not ' +
             'already carry it. Pick one of the two forms and apply it to all of them.';
         } else if (strictKeys.size === 1) {
-          subtype = 'formatting';
-          points = 85;
-          signals.push(signal('Written identically bar capitalisation, accents, quotes or spaces', 'strong'));
+          // The forms are the same title bar capitalisation, accents, quotes or spaces.
+          // Which of those it is matters, so they are split apart: a wrong accent or a
+          // broken quote is damaged tagging, while a difference of capitalisation alone
+          // changes nothing about the track and carries no information. That second kind
+          // gets its own sub-case and does not count as work to do.
+          caseOnly = new Set(variants.map(function (v) { return v.value.toLowerCase(); })).size === 1;
+          if (caseOnly) {
+            subtype = 'case_only';
+            action = 'review_capitalisation';
+            points = 44;
+            signals.push(signal('The forms differ only in capitalisation', 'strong'));
+          } else {
+            subtype = 'formatting';
+            points = 85;
+            signals.push(signal('Written identically except for accents, quotes or spaces', 'strong'));
+          }
         } else if (qualifiers.size === 1 && withQualifier.length === variants.length) {
           subtype = 'qualifier_formatting';
           points = 78;
           signals.push(signal('Same qualifier, but in brackets in one form and after a dash in the other', 'strong'));
         } else if (withoutQualifier.length && withQualifier.length) {
-          subtype = 'one_qualified';
-          points = 52;
           signals.push(signal('One form carries no qualifier and the other does', 'medium'));
           if (withQualifier.some(function (v) { return v.differentVersion; })) {
+            // “Patata” against “Patata (live)”. The qualifier claims a different
+            // recording, so this is not a merge to do but a decision to make: it
+            // gets its own sub-case, away from the ordinary title variants, and it
+            // does not count as work to do.
+            subtype = 'version_marker';
+            action = 'review_track';
+            points = 40;
+            signals.push(
+              signal('The other form says it is a different recording: “' + qualifierList(withQualifier) + '”', 'strong')
+            );
             warning =
               'Careful: that qualifier (live, remix, acoustic, version…) usually means a DIFFERENT ' +
               'recording. Do not merge without checking.';
-            points = 40;
+          } else {
+            subtype = 'one_qualified';
+            points = 52;
           }
         } else {
           subtype = 'different_qualifiers';
+          action = 'review_track';
           points = 38;
           signals.push(signal('The qualifiers differ from one another', 'weak'));
           warning = 'These may well be different versions. Check them one by one before merging.';
         }
         var ordered = variants.slice().sort(function (x, y) { return y.n - x.n; });
         var canonical = chooseCanonical(ordered);
+        // With a version marker the plain form is the safer proposal: the qualified
+        // one explicitly claims to be a different recording, so renaming the plain
+        // scrobbles into it would invent a credit they never had. Choosing on
+        // recency or on name length picked “Amarcord - Acoustic Version” as the
+        // target and told you to turn “Amarcord” into it.
+        if (subtype === 'version_marker' && withoutQualifier.length) {
+          canonical = withoutQualifier.slice().sort(function (x, y) { return y.n - x.n; })[0];
+        }
         var impact = variants.reduce(function (acc, v) {
           return v.value === canonical.value ? acc : acc + v.n;
         }, 0);
@@ -1828,7 +2509,7 @@
           title: '“' + artist + '” — ' + variants.length + ' forms of the same title',
           points: points + Math.min(8, Math.log10(1 + impact) * 6),
           impact: impact,
-          action: 'rename_track',
+          action: action,
           current: variants
             .filter(function (v) { return v.value !== canonical.value; })
             .map(function (v) { return v.value; })
@@ -1839,7 +2520,13 @@
           explanation:
             'Under “' + artist + '” you have ' + variants.length + ' different forms of the same title. ' +
             'The proposal is to keep “' + canonical.value + '” (' + num(canonical.n) + ' scrobbles) and ' +
-            'change ' + num(impact) + ' scrobble(s) of the other forms.',
+            'change ' + num(impact) + ' scrobble(s) of the other forms.' +
+            (caseOnly
+              ? ' Capitalisation is the only difference, so nothing here is damaged and nothing is lost: ' +
+                'unifying them is tidiness, not a fix, which is why it is not counted as work to do. ' +
+                'Whether Last.fm draws a line between two spellings that differ only in capitalisation is ' +
+                'not something this file can tell you.'
+              : ''),
           evidence: { title: 'Forms found', items: examples },
           alternatives: ordered
             .filter(function (v) { return v.value !== canonical.value; })
@@ -1857,9 +2544,295 @@
     return out;
   }
 
+  /**
+   * Titles written almost identically under the same artist: "Patata" against
+   * "Patataa" or "Papata". The comparison is deliberately narrow, because with
+   * short titles almost any two of them are one character apart:
+   *   - same artist, and both titles start with the same letter;
+   *   - the rarer form has at most RULES.maxScrobblesForRareTitle scrobbles (and
+   *     there is a difference in volume: with a tie there is no way to tell which
+   *     one is the typo);
+   *   - within RULES.maxTitleTypoDistance characters, or
+   *     maxTitleTypoDistanceWithAlbum when both forms share an album;
+   *   - titles that differ only in their digits are never compared ("Track 1"
+   *     against "Track 2" is two different songs);
+   *   - titles carrying a version marker (live, remix, acoustic…) are skipped.
+   */
+  function detectTitleTypos(index) {
+    var out = [];
+    index.list.forEach(function (artist) {
+      var keys = Array.from(artist.tracks.keys()).filter(function (k) {
+        return k.length >= RULES.minTitleLengthForTypoCompare;
+      });
+      if (keys.length < 2) return;
+      var byInitial = new Map();
+      keys.forEach(function (k) {
+        var initial = k.slice(0, 1);
+        var bucket = byInitial.get(initial);
+        if (!bucket) {
+          bucket = [];
+          byInitial.set(initial, bucket);
+        }
+        bucket.push(k);
+      });
+      byInitial.forEach(function (bucket) {
+        for (var x = 0; x < bucket.length; x++) {
+          for (var y = x + 1; y < bucket.length; y++) {
+            var aKey = bucket[x];
+            var bKey = bucket[y];
+            if (Math.abs(aKey.length - bKey.length) > RULES.maxTitleTypoDistanceWithAlbum) continue;
+            // “Lugar I” against “Lugar II”, “Track 1” against “Track 2”: two
+            // different songs, not a typo.
+            if (sameModuloOrdinals(aKey, bKey)) continue;
+            // “Tequila & Lemon (Instrumental)” against “Tequila & Lemon” looks one
+            // character apart once the qualifier is stripped: it is a different
+            // recording, and the rest of the engine treats it as one.
+            if (
+              RE_DIFFERENT_VERSION.test(aKey) ||
+              RE_DIFFERENT_VERSION.test(bKey) ||
+              trackHasVersionMarker(artist.tracks.get(aKey)) ||
+              trackHasVersionMarker(artist.tracks.get(bKey))
+            ) {
+              continue;
+            }
+            var a = artist.tracks.get(aKey);
+            var b = artist.tracks.get(bKey);
+            var rarer = a.n <= b.n ? a : b;
+            var commoner = rarer === a ? b : a;
+            if (rarer.n >= commoner.n) continue; // a tie: no way to pick a suspect
+            if (rarer.n > RULES.maxScrobblesForRareTitle) continue;
+            var sharedAlbum = firstSharedKey(rarer.albums, commoner.albums);
+            var limit = sharedAlbum ? RULES.maxTitleTypoDistanceWithAlbum : RULES.maxTitleTypoDistance;
+            var distance = editDistance(aKey, bKey, limit);
+            if (distance > limit) continue;
+            var rareForm = mostFrequent(rarer.titles);
+            var commonForm = mostFrequent(commoner.titles);
+            var points = 38;
+            points += distance === 1 ? 14 : 7;
+            if (sharedAlbum) points += 16;
+            if (rarer.n === 1 && sharedAlbum) points += 6;
+            var signals = [
+              signal(
+                'The two titles are ' + num(distance) + ' character(s) apart: “' + rareForm + '” against “' +
+                  commonForm + '”',
+                distance === 1 ? 'strong' : 'medium'
+              )
+            ];
+            if (sharedAlbum) {
+              signals.push(signal('Both forms are scrobbled under the album “' + sharedAlbum + '”', 'strong'));
+            }
+            signals.push(signal('The rarer form only has ' + num(rarer.n) + ' scrobble(s)', 'medium'));
+            signals.push(
+              signal('Only titles starting with the same letter are compared: this check is deliberately narrow', 'note')
+            );
+            var finding = newFinding({
+              type: 'title_variants',
+              subtype: 'typo',
+              title: 'Probably a typo: “' + rareForm + '” → “' + commonForm + '”',
+              points: points,
+              impact: rarer.n,
+              action: 'rename_track',
+              current: rareForm,
+              proposed: commonForm,
+              signals: signals,
+              warning:
+                'A similar name can be a different song. If “' + rareForm + '” is a different recording, leave ' +
+                'it alone: the engine only sees the spelling, and “' + commonForm + '” has ' + num(commoner.n) +
+                ' scrobble(s).',
+              explanation:
+                'Under “' + artist.name + '” this title appears both as “' + commonForm + '” (' +
+                num(commoner.n) + ' scrobbles) and as “' + rareForm + '” (' + num(rarer.n) + '), ' +
+                num(distance) + ' character(s) apart' + (sharedAlbum ? ', on the same album' : '') +
+                '. One of the two is very probably a typo, and the rarer one is the likelier candidate.',
+              evidence: {
+                title: 'The two forms',
+                items: [
+                  { a: rareForm, b: num(rarer.n) + ' scrobble(s) · the rarer form' },
+                  { a: commonForm, b: num(commoner.n) + ' scrobble(s) · the proposed form' }
+                ]
+              }
+            });
+            finding.__variants = [[artist.name, rareForm]];
+            out.push(finding);
+          }
+        }
+      });
+    });
+    return out;
+  }
+
+  /** The qualifiers found across a set of title variants, as a readable list. */
+  function qualifierList(variants) {
+    var seen = [];
+    variants.forEach(function (v) {
+      if (v.qualifiers && seen.indexOf(v.qualifiers) < 0) seen.push(v.qualifiers);
+    });
+    return seen.join(' · ');
+  }
+
+  function firstSharedKey(mapA, mapB) {
+    var found = null;
+    mapA.forEach(function (count, name) {
+      if (found != null) return;
+      if (mapB.has(name)) found = name;
+    });
+    return found;
+  }
+
+  var RE_ROMAN =
+    /^(i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|xv|xvi|xvii|xviii|xix|xx)$/;
+
+  /** The key with digits and roman numerals removed, for comparing sequences. */
+  function ordinalStripped(k) {
+    return k
+      .replace(/[0-9]+/g, ' ')
+      .split(' ')
+      .filter(function (w) {
+        return w && !RE_ROMAN.test(w);
+      })
+      .join(' ');
+  }
+
+  /**
+   * True when two titles are the same once their numbering is dropped: “Lugar I”
+   * and “Lugar II” are two different songs, so they must never pair up.
+   */
+  function sameModuloOrdinals(aKey, bKey) {
+    return ordinalStripped(aKey) === ordinalStripped(bKey);
+  }
+
+  /**
+   * True when any spelling of a track carries a version marker (live, remix,
+   * instrumental…). The loose key drops the qualifier, so the raw titles are the
+   * only place that marker can still be seen.
+   */
+  function trackHasVersionMarker(track) {
+    if (!track) return false;
+    var found = false;
+    track.titles.forEach(function (count, raw) {
+      if (!found && RE_DIFFERENT_VERSION.test(key(raw))) found = true;
+    });
+    return found;
+  }
+
+  /* --- 6.4b Titles carrying a platform badge --------------------------------- */
+
+  /**
+   * “Song (Official Video)”, “Song - Audio”, “Song (Lyric Video)”: the title a
+   * video page carries, not the one the track has. It is worth saying out loud
+   * because it points at where the scrobble came from — YouTube or Vevo, not a
+   * music player — and because it is invisible when EVERY scrobble of a track
+   * carries the badge, since then there is no clean spelling to compare against.
+   *
+   * The proposal is the badge-free title: the clean spelling you already have if
+   * there is one, or the same title with only the badge removed if there is not.
+   */
+  function detectPlatformBadges(index) {
+    var out = [];
+    index.list.forEach(function (artist) {
+      artist.tracks.forEach(function (track) {
+        var badges = [];
+        var plain = [];
+        track.titles.forEach(function (n, raw) {
+          // “Nina - Amame (Official Video)” repeats the artist as well, and the
+          // “Artist repeated in title” detector strips the prefix AND the badge in
+          // one card. Claiming it here too would mean two cards and two half fixes.
+          if (titleRepeatsArtist(artist.name, raw)) return;
+          var qualifiers = qualifiersOf(raw);
+          var bad = qualifiers.split(' | ').filter(isPlatformBadge);
+          if (bad.length) badges.push({ value: raw, n: n, badges: bad });
+          else plain.push({ value: raw, n: n });
+        });
+        if (!badges.length) return;
+        plain.sort(function (a, b) { return b.n - a.n; });
+        var plainNames = new Set(plain.map(function (p) { return p.value; }));
+        // The proposal is always “the same title with the badge taken off”, never
+        // “the most scrobbled clean form”: the second one can ask for more than the
+        // badge (turning “Song (Visual)” into “Song (feat. X)” reads as adding a
+        // credit), and unifying spellings is the other sub-case’s job anyway.
+        var buckets = new Map(); // stripped title -> { target, forms, n }
+        badges.forEach(function (b) {
+          var target = stripPlatformBadges(b.value);
+          if (!target || target === b.value) return;
+          var bucket = buckets.get(target);
+          if (!bucket) {
+            bucket = { target: target, forms: [], n: 0 };
+            buckets.set(target, bucket);
+          }
+          bucket.forms.push(b);
+          bucket.n += b.n;
+        });
+        buckets.forEach(function (bucket) {
+          bucket.forms.sort(function (a, b) { return b.n - a.n; });
+          var impact = bucket.n;
+          var hasClean = plainNames.has(bucket.target);
+          var points = 55 + Math.min(12, Math.log10(1 + impact) * 9) + (hasClean ? 0 : 6);
+          var signals = [
+            signal(
+              'The title carries a platform badge: ' +
+                bucket.forms[0].badges.map(function (b) { return '“' + b + '”'; }).join(', '),
+              'strong'
+            )
+          ];
+          if (hasClean) {
+            signals.push(
+              signal('You also have the clean title under the same artist: “' + bucket.target + '”', 'strong')
+            );
+          } else {
+            signals.push(signal('No scrobble of this track has the clean title', 'note'));
+          }
+          signals.push(signal(num(impact) + ' scrobble(s) carry the badge', 'medium'));
+          var finding = newFinding({
+            type: 'title_variants',
+            subtype: 'platform_badge',
+            title:
+              bucket.forms.length === 1
+                ? 'Scrobbled from a video page: “' + bucket.forms[0].value + '”'
+                : bucket.forms.length + ' video-page forms of “' + bucket.target + '”',
+            points: points,
+            impact: impact,
+            action: 'rename_track',
+            current: bucket.forms.map(function (b) { return b.value; }).join('  /  '),
+            proposed: bucket.target,
+            signals: signals,
+            warning:
+              'A title ending in “(Official Video)”, “(Official Audio)” or “(Lyric Video)” is usually a sign ' +
+              'that the scrobble came from a video page (YouTube, Vevo) rather than from your music player, ' +
+              'and Last.fm stored the video’s title as the track name. Stripping the badge gives the track its ' +
+              'real name, but if you scrobbled the video on purpose, leave it alone.',
+            explanation:
+              'Under “' + artist.name + '” the title appears as “' + bucket.forms[0].value + '”, which adds ' +
+              'something a video page says about the upload (that it is the official video, the audio, the ' +
+              'lyrics…) rather than something that belongs to the song. ' +
+              (hasClean
+                ? 'You also have the clean form “' + bucket.target + '”, so these ' + num(impact) +
+                  ' scrobble(s) are simply the same track tagged twice.'
+                : 'No scrobble of this track carries the clean title, so all ' + num(impact) +
+                  ' of them would be renamed at once.'),
+            evidence: {
+              title: 'Forms found',
+              items: bucket.forms
+                .map(function (b) {
+                  return { a: b.value, b: num(b.n) + ' scrobble(s) · with a badge' };
+                })
+                .concat(
+                  plain.map(function (p) {
+                    return { a: p.value, b: num(p.n) + ' scrobble(s)' };
+                  })
+                )
+            }
+          });
+          finding.__variants = bucket.forms.map(function (b) { return [artist.name, b.value]; });
+          out.push(finding);
+        });
+      });
+    });
+    return out;
+  }
+
   /* --- 6.5 Albums ------------------------------------------------------------ */
 
-  function detectAlbumIssues(scrobbles, index) {
+  function detectAlbumIssues(scrobbles, index, stats) {
     var out = [];
     // (a) fillable missing albums and (b) album clashes
     var byCombo = new Map();
@@ -1928,7 +2901,10 @@
         var impact = group.n - canonical.n - group.missing;
         // The "single vs album" case is legitimate and very common: only list it
         // when there is enough volume to be worth a look.
-        if (impact < RULES.minAlbumImpact) return;
+        if (impact < RULES.minAlbumImpact) {
+          if (stats) stats.albumClashesBelowThreshold++;
+          return;
+        }
         var points2 = 48 + Math.min(10, Math.log10(1 + impact) * 6);
         var canonicalLooksLikeTitle = key(canonical.value) === looseTitleKey(title);
         if (canonicalLooksLikeTitle) points2 = Math.min(points2, 44);
@@ -1968,9 +2944,10 @@
       }
     });
 
-    // (c) album name variants (formatting differences only)
+    // (c) album name variants (formatting differences only), one artist at a time
     var cosmetic = [];
-    index.albumNames.forEach(function (spellings) {
+    index.albumNames.forEach(function (entry) {
+      var spellings = entry.spellings;
       if (spellings.size < 2) return;
       var ranked = Array.from(spellings.entries()).sort(function (x, y) { return y[1] - x[1]; });
       // Only when the difference is capitalisation/accents/spaces/quotes
@@ -1979,34 +2956,78 @@
       var canonical = ranked[0][0];
       var impact = ranked.reduce(function (acc, e) { return e[0] === canonical ? acc : acc + e[1]; }, 0);
       if (!impact) return;
+      var otherForms = ranked
+        .filter(function (e) { return e[0] !== canonical; })
+        .map(function (e) { return e[0]; });
+      var evidence = {
+        title: 'Forms found',
+        items: ranked.map(function (e) { return { a: e[0], b: num(e[1]) + ' scrobble(s)' }; })
+      };
+      var sameArtist = signal(
+        'Both spellings are scrobbled under the same artist (“' + entry.artist + '”)',
+        'strong'
+      );
+      var affected = otherForms.map(function (form) { return [entry.artist, form]; });
+      // Capitalisation alone: the same album name either way, nothing damaged. It gets
+      // its own sub-case and does not count as work, the same way a title that differs
+      // only in capitalisation is treated. A wrong accent or a missing space, on the
+      // other hand, is a tagging mistake and keeps the high score. The two shapes are
+      // spelled out separately on purpose: `check-docs` reads this file to make sure
+      // every sub-case and action is documented, and it cannot see through a ternary.
+      if (new Set(ranked.map(function (e) { return e[0].toLowerCase(); })).size === 1) {
+        var cosmeticFinding = newFinding({
+          type: 'albums',
+          subtype: 'case_only',
+          action: 'review_capitalisation',
+          title: 'Album written with different capitalisation: “' + entry.artist + ' — ' + canonical + '”',
+          points: 44 + Math.min(8, Math.log10(1 + impact) * 6),
+          impact: impact,
+          current: otherForms.join('  /  '),
+          proposed: canonical,
+          signals: [signal('The spellings differ only in capitalisation', 'strong'), sameArtist],
+          explanation:
+            'This album appears under “' + entry.artist + '” with ' + ranked.length + ' spellings that differ ' +
+            'only in capitalisation, so one album is written twice in this library. Nothing is damaged and ' +
+            'nothing is lost either way: unifying them is tidiness, not a fix, which is why it is not counted ' +
+            'as work to do. If you do want them together, “' + canonical + '” is the form with the most ' +
+            'scrobbles.',
+          evidence: evidence
+        });
+        cosmeticFinding.__albumsGlobal = affected;
+        cosmetic.push(cosmeticFinding);
+        return;
+      }
       var finding = newFinding({
         type: 'albums',
         subtype: 'name_variants',
-        title: 'Album with ' + ranked.length + ' forms: “' + canonical + '”',
+        action: 'merge_album',
+        title: 'Album with ' + ranked.length + ' forms: “' + entry.artist + ' — ' + canonical + '”',
         points: 74 + Math.min(10, Math.log10(1 + impact) * 8),
         impact: impact,
-        action: 'merge_album',
-        current: ranked
-          .filter(function (e) { return e[0] !== canonical; })
-          .map(function (e) { return e[0]; })
-          .join('  /  '),
+        current: otherForms.join('  /  '),
         proposed: canonical,
-        signals: [signal('The same album written with different capitalisation or accents', 'strong')],
+        signals: [
+          signal('The same album written with different capitalisation, accents or spacing', 'strong'),
+          sameArtist
+        ],
+        // No claim about how Last.fm's catalogue treats capitalisation: the CSV
+        // cannot tell us. What it does show is that this same artist carries the
+        // name twice, which is what the card asks to fix.
         explanation:
-          'The same album name appears with ' + ranked.length + ' spellings. In Last.fm these are technically ' +
-          'different pages, so it is worth merging them.',
-        evidence: {
-          title: 'Forms found',
-          items: ranked.map(function (e) { return { a: e[0], b: num(e[1]) + ' scrobble(s)' }; })
-        }
+          'This album appears under “' + entry.artist + '” with ' + ranked.length + ' spellings that differ ' +
+          'in capitalisation, accents or spacing, so one album is written twice in this library. The ' +
+          'proposal keeps “' + canonical + '”, the form with the most scrobbles; nothing changes in Last.fm ' +
+          'until you edit those scrobbles yourself.',
+        evidence: evidence
       });
-      finding.__albumsGlobal = ranked
-        .filter(function (e) { return e[0] !== canonical; })
-        .map(function (e) { return e[0]; });
+      finding.__albumsGlobal = affected;
       cosmetic.push(finding);
     });
     cosmetic.sort(function (a, b) { return b.impact - a.impact; });
-    return out.concat(cosmetic.slice(0, 60));
+    if (stats && cosmetic.length > RULES.maxAlbumNameVariants) {
+      stats.albumNameVariantsBeyondCap += cosmetic.length - RULES.maxAlbumNameVariants;
+    }
+    return out.concat(cosmetic.slice(0, RULES.maxAlbumNameVariants));
   }
 
   /* --- 6.6 Duplicate scrobbles ---------------------------------------------- */
@@ -2374,6 +3395,13 @@
   function analyseWith(scrobbles, options, started) {
     var index = buildIndex(scrobbles);
     var findings = [];
+    // Everything the detectors decide not to report is counted here, so that the
+    // summary can say what was left out instead of dropping it in silence.
+    var stats = {
+      artistPairsWithoutSharedTrack: 0,
+      albumClashesBelowThreshold: 0,
+      albumNameVariantsBeyondCap: 0
+    };
 
     var combinedFindings = detectCombinedArtists(index);
     // A name already covered by a combined-name finding must not produce a second
@@ -2385,7 +3413,18 @@
         absorbed.set(name, f.proposed);
       });
     });
-    var mergeFindings = buildMergeFindings(detectMergePairs(index), index).filter(function (f) {
+    var mergeFindings = buildMergeFindings(detectMergePairs(index, stats), index).filter(function (f) {
+      if (!f.__artists || !f.__artists.length) return true;
+      var covered = f.__artists.every(function (name) {
+        return absorbed.get(name) === f.proposed;
+      });
+      if (covered) coveredByStronger++;
+      return !covered;
+    });
+
+    // A similar-name pair that a combined-name finding already resolves the same
+    // way must not appear twice, exactly like the other duplicate findings.
+    var similarFindings = detectSimilarArtistNames(index).filter(function (f) {
       if (!f.__artists || !f.__artists.length) return true;
       var covered = f.__artists.every(function (name) {
         return absorbed.get(name) === f.proposed;
@@ -2395,10 +3434,13 @@
     });
 
     findings = findings.concat(mergeFindings);
+    findings = findings.concat(similarFindings);
     findings = findings.concat(combinedFindings);
     findings = findings.concat(detectTitleVariants(scrobbles));
+    findings = findings.concat(detectPlatformBadges(index));
+    findings = findings.concat(detectTitleTypos(index));
     findings = findings.concat(detectArtistInTitle(scrobbles));
-    findings = findings.concat(detectAlbumIssues(scrobbles, index));
+    findings = findings.concat(detectAlbumIssues(scrobbles, index, stats));
     findings = findings.concat(detectDuplicateScrobbles(scrobbles));
     findings = findings.concat(detectLongTail(scrobbles, index));
 
@@ -2446,7 +3488,9 @@
       }
       if (f.__emptyAlbums) f.__emptyAlbums.forEach(function (pair) { emptyAlbumSet.add(pair[0] + '\u0000' + pair[1]); });
       if (f.__albums) f.__albums.forEach(function (t) { albumSet.add(t.join('\u0000')); });
-      if (f.__albumsGlobal) f.__albumsGlobal.forEach(function (a) { albumGlobalSet.add(key(a)); });
+      if (f.__albumsGlobal) {
+        f.__albumsGlobal.forEach(function (a) { albumGlobalSet.add(a[0] + '\u0000' + key(a[1])); });
+      }
       if (f.__duplicateIndexes) f.__duplicateIndexes.forEach(function (i) { duplicateSet.add(i); });
     });
 
@@ -2471,7 +3515,7 @@
         variantSet.has(s.artist + '\u0000' + s.title) ||
         (s.album === '' && emptyAlbumSet.has(s.artist + '\u0000' + loose)) ||
         (s.album !== '' && albumSet.has(s.artist + '\u0000' + loose + '\u0000' + s.album)) ||
-        (s.album !== '' && albumGlobalSet.has(key(s.album))) ||
+        (s.album !== '' && albumGlobalSet.has(s.artist + '\u0000' + key(s.album))) ||
         duplicateSet.has(s.i);
       if (affected) affectedScrobbles++;
     }
@@ -2490,7 +3534,7 @@
       });
       bucket.findings++;
       bucket.impact += f.impact;
-      if (f.action !== 'review') bucket.actionable++;
+      if (f.actionable) bucket.actionable++;
       bucket[f.confidence === 'high' ? 'high' : f.confidence === 'medium' ? 'medium' : 'low']++;
     });
     var typesSummary = TYPE_ORDER.filter(function (t) {
@@ -2530,13 +3574,19 @@
         findings: findings.length,
         affectedScrobbles: affectedScrobbles,
         actions: findings.filter(function (f) {
-          return f.action !== 'review';
+          return f.actionable;
         }).length,
         highConfidenceActions: findings.filter(function (f) {
-          return f.action !== 'review' && f.confidence === 'high';
+          return f.actionable && f.confidence === 'high';
         }).length,
         omitted: omitted,
         coveredByStronger: coveredByStronger,
+        // Checks the detectors made and did not list, with a reason each.
+        trimmed: {
+          artistPairsWithoutSharedTrack: stats.artistPairsWithoutSharedTrack,
+          albumClashesBelowThreshold: stats.albumClashesBelowThreshold,
+          albumNameVariantsBeyondCap: stats.albumNameVariantsBeyondCap
+        },
         minimumConfidence: RULES.minimumConfidence
       },
       findings: findings
@@ -2561,13 +3611,19 @@
    * Action list, one row per finding, with an empty `decision` column so you can
    * mark accept/reject while you work through it.
    */
-  function toCSV(report) {
+  function toCSV(report, options) {
+    options = options || {};
+    var decisions = options.decisions || {};
     var header = [
-      'type', 'subtype', 'confidence', 'points', 'action', 'impact_scrobbles',
+      'type', 'subtype', 'confidence', 'points', 'action', 'actionable', 'impact_scrobbles',
       'current_value', 'proposed_value', 'alternatives', 'signals', 'decision', 'evidence'
     ];
     var rows = [header.join(';')];
     report.findings.forEach(function (f) {
+      var decision = decisions[f.id] || 'pending';
+      // Discarded findings are dropped from the export by the interface, which is
+      // the only place that knows about them; the CLI keeps every row.
+      if (options.omitDiscarded && decision === 'discard') return;
       var evidence = '';
       if (f.evidence && f.evidence.items) {
         evidence = f.evidence.items
@@ -2580,14 +3636,73 @@
       }
       rows.push(
         [
-          f.type, f.subtype, f.confidence, f.points, f.action, f.impact, f.current, f.proposed,
+          f.type, f.subtype, f.confidence, f.points, f.action, f.actionable ? 'yes' : 'no', f.impact,
+          f.current, f.proposed,
           f.alternatives.map(function (a) { return a.value + ' (' + a.reason + ')'; }).join(' | '),
           f.signals.map(function (s) { return s.text; }).join(' | '),
-          '', evidence
+          decision, evidence
         ].map(csvField).join(';')
       );
     });
     return rows.join('\n');
+  }
+
+  /**
+   * The accepted findings as a plain checklist to tick off while editing Last.fm.
+   * This is what the Accept button is for: the report is for reading, this is the
+   * working document.
+   */
+  function toWorklist(report, decisions) {
+    decisions = decisions || {};
+    var accepted = report.findings.filter(function (f) {
+      return decisions[f.id] === 'accept';
+    });
+    var lines = [];
+    lines.push('# Last.fm Lens — to-do list');
+    lines.push('');
+    lines.push('**Source:** ' + report.meta.source + '  ');
+    lines.push(
+      '**Accepted:** ' + num(accepted.length) + ' of ' + num(report.summary.findings) +
+        ' findings · **scrobbles to touch:** ' + num(accepted.reduce(function (acc, f) { return acc + f.impact; }, 0))
+    );
+    lines.push('');
+    if (!accepted.length) {
+      lines.push(
+        'Nothing accepted yet. In the report, press **Accept** on the findings you want to work on and ' +
+          'download this list again.'
+      );
+      return lines.join('\n');
+    }
+    lines.push(
+      'Work through these in Last.fm. Artist, track and album edits are **retroactive**: Last.fm offers to ' +
+        'apply the change to every scrobble of that combination, so look twice before confirming. Deleting a ' +
+        'duplicate scrobble is one at a time, from the scrobble’s (⋯) menu.'
+    );
+    lines.push('');
+    var byType = {};
+    accepted.forEach(function (f) {
+      (byType[f.type] = byType[f.type] || []).push(f);
+    });
+    TYPE_ORDER.forEach(function (type) {
+      var list = byType[type];
+      if (!list || !list.length) return;
+      lines.push('## ' + TYPE_LABELS[type]);
+      lines.push('');
+      list.sort(function (a, b) {
+        return b.impact - a.impact || b.points - a.points;
+      });
+      list.forEach(function (f) {
+        lines.push('- [ ] ' + f.title);
+        lines.push(
+          '  - **' + f.actionLabel + '**' +
+            (f.current ? ' — `' + f.current + '` → `' + f.proposed + '`' : '') +
+            ' · ' + num(f.impact) + ' scrobble(s) · ' + f.confidence + ' ' + f.points + '/100'
+        );
+        if (f.howTo) lines.push('  - ' + f.howTo);
+      });
+      lines.push('');
+    });
+    return lines.join('\n');
   }
 
   function toMarkdown(report) {
@@ -2648,6 +3763,33 @@
           '“Ana, Bruno → Ana”).'
       );
     }
+    var trimmed = report.summary.trimmed || {};
+    var trimmedTotal =
+      (trimmed.artistPairsWithoutSharedTrack || 0) +
+      (trimmed.albumClashesBelowThreshold || 0) +
+      (trimmed.albumNameVariantsBeyondCap || 0);
+    if (trimmedTotal) {
+      lines.push('- **' + num(trimmedTotal) + ' check(s) were deliberately not listed**, and are counted here so ' +
+        'nothing disappears quietly:');
+      if (trimmed.artistPairsWithoutSharedTrack) {
+        lines.push(
+          '  - ' + num(trimmed.artistPairsWithoutSharedTrack) + ' artist-name pair(s) that share no track ' +
+            '(looking similar is not evidence).'
+        );
+      }
+      if (trimmed.albumClashesBelowThreshold) {
+        lines.push(
+          '  - ' + num(trimmed.albumClashesBelowThreshold) + ' album clash(es) below ' +
+            num(report.meta.rules.minAlbumImpact) + ' affected scrobbles.'
+        );
+      }
+      if (trimmed.albumNameVariantsBeyondCap) {
+        lines.push(
+          '  - ' + num(trimmed.albumNameVariantsBeyondCap) + ' album-name variant(s) past the ' +
+            num(report.meta.rules.maxAlbumNameVariants) + ' listed (raise `RULES.maxAlbumNameVariants` to see them).'
+        );
+      }
+    }
     lines.push('');
     lines.push(
       'This report is produced by **code alone** (normalised key comparison and sets of tracks), with no ' +
@@ -2675,7 +3817,14 @@
         lines.push('');
         lines.push('- **Confidence:** ' + f.confidence.toUpperCase() + ' (' + f.points + '/100)');
         lines.push('- **Impact:** ' + num(f.impact) + ' scrobble(s)');
-        lines.push('- **Action:** ' + f.actionLabel + (f.current ? ' — `' + f.current + '` → `' + f.proposed + '`' : ''));
+        lines.push(
+          '- **Action:** ' + f.actionLabel +
+            (f.actionable ? '' : ' (advisory: it may well be correct, ignore it)') +
+            (f.current ? ' — `' + f.current + '` → `' + f.proposed + '`' : '')
+        );
+        if (subtypeLabel(f.type, f.subtype)) {
+          lines.push('- **Kind:** ' + subtypeLabel(f.type, f.subtype));
+        }
         if (f.signals.length) {
           lines.push('- **Signals:**');
           f.signals.forEach(function (s) {
@@ -2762,10 +3911,14 @@
     RULES: RULES,
     TYPE_LABELS: TYPE_LABELS,
     TYPE_ORDER: TYPE_ORDER,
+    SUBTYPE_LABELS: SUBTYPE_LABELS,
+    ACTIONS: ACTIONS,
+    subtypeLabel: subtypeLabel,
     parseCSV: parseCSV,
     readCSV: readCSV,
     analyse: analyse,
     toMarkdown: toMarkdown,
+    toWorklist: toWorklist,
     toCSV: toCSV,
     toJSON: toJSON,
     util: {
@@ -2790,16 +3943,57 @@
   var L = window.LastfmLens;
   var report = window.__REPORT__ || null;
   var decisions = {};
-  var filters = { types: null, confidence: null, text: '', actionableOnly: false, compact: false, sort: 'confidence' };
+  var storageKey = null;
+  var filters = { hidden: {}, confidence: null, text: '', actionableOnly: false, density: 'auto', sort: 'category' };
 
   var $ = function (id) { return document.getElementById(id); };
 
-  try {
-    decisions = JSON.parse(localStorage.getItem('lastfm-lens-decisions') || '{}') || {};
-  } catch (e) { decisions = {}; }
+  /**
+   * Decisions are kept per report, not per browser. A single shared key meant the
+   * Accept/Discard marks of one CSV showed up on top of another one.
+   */
+  function decisionsKey(data) {
+    if (!data || !data.meta) return 'lastfm-lens-decisions:empty';
+    var fingerprint = (data.meta.source || '') + '|' + (data.meta.scrobbles || 0);
+    var hash = 0;
+    for (var i = 0; i < fingerprint.length; i++) {
+      hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
+    }
+    return 'lastfm-lens-decisions:' + (hash >>> 0).toString(36);
+  }
+
+  function loadDecisions(data) {
+    storageKey = decisionsKey(data);
+    try {
+      decisions = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+    } catch (e) { decisions = {}; }
+  }
 
   function saveDecisions() {
-    try { localStorage.setItem('lastfm-lens-decisions', JSON.stringify(decisions)); } catch (e) {}
+    if (!storageKey) return;
+    try { localStorage.setItem(storageKey, JSON.stringify(decisions)); } catch (e) {}
+  }
+
+  /**
+   * The sections you switched off are remembered per report too, so a section you
+   * never want to look at (“Duplicate scrobbles”, say) is still out of the way the
+   * next time you open the same file. It is a separate key from the decisions on
+   * purpose: a view preference is not a decision about a finding.
+   */
+  function loadView() {
+    filters.hidden = {};
+    if (!storageKey) return;
+    try {
+      var saved = JSON.parse(localStorage.getItem(storageKey + ':view') || '{}') || {};
+      (saved.hiddenSections || []).forEach(function (type) { filters.hidden[type] = true; });
+    } catch (e) { filters.hidden = {}; }
+  }
+
+  function saveView() {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey + ':view', JSON.stringify({ hiddenSections: Object.keys(filters.hidden) }));
+    } catch (e) {}
   }
 
   function escapeHtml(s) {
@@ -2870,6 +4064,8 @@
   /* ---------------- rendering ---------------- */
 
   function render(data) {
+    loadDecisions(data);
+    loadView();
     $('results').classList.remove('hidden');
     var m = data.meta;
     var affectedPct = m.scrobbles ? Math.round(100 * data.summary.affectedScrobbles / m.scrobbles) : 0;
@@ -2879,58 +4075,86 @@
       { n: L.util.num(m.tracks), t: 'tracks' },
       { n: L.util.num(m.albums), t: 'albums' },
       { n: L.util.shortDate(m.from) + ' → ' + L.util.shortDate(m.to), t: 'period' },
-      { n: L.util.num(data.summary.affectedScrobbles) + ' (' + affectedPct + '%)', t: 'scrobbles affected', lead: true },
+      { n: L.util.num(data.summary.affectedScrobbles) + ' (' + affectedPct + '%)', t: 'scrobbles looked at', lead: true },
       { n: L.util.num(data.summary.highConfidenceActions), t: 'high-confidence actions', lead: true },
+      { n: L.util.num(data.summary.findings - data.summary.actions), t: 'advisory (may be fine)' },
       { n: L.util.num(data.summary.findings), t: 'findings in total' }
     ];
+
+    // Everything a detector checked and chose not to list is said out loud here,
+    // instead of disappearing. This is also where the counts that used to be
+    // dropped in silence (the album-variant cap above all) show up.
+    var notes = [];
+    var trimmed = data.summary.trimmed || {};
+    var trimmedParts = [];
+    if (trimmed.artistPairsWithoutSharedTrack) {
+      trimmedParts.push(L.util.num(trimmed.artistPairsWithoutSharedTrack) +
+        ' artist-name pair(s) that share no track (looking similar is not evidence)');
+    }
+    if (trimmed.albumClashesBelowThreshold) {
+      trimmedParts.push(L.util.num(trimmed.albumClashesBelowThreshold) + ' album clash(es) below ' +
+        L.util.num(m.rules.minAlbumImpact) + ' affected scrobbles');
+    }
+    if (trimmed.albumNameVariantsBeyondCap) {
+      trimmedParts.push(L.util.num(trimmed.albumNameVariantsBeyondCap) + ' album-name variant(s) past the ' +
+        L.util.num(m.rules.maxAlbumNameVariants) + ' listed (raise RULES.maxAlbumNameVariants to see them)');
+    }
+    if (data.summary.omitted) {
+      trimmedParts.push(L.util.num(data.summary.omitted) + ' finding(s) under the minimum confidence (' +
+        (data.summary.minimumConfidence || 'medium') + ')');
+    }
+    if (trimmedParts.length) {
+      notes.push({ cls: 'note-box', text: 'Not listed on purpose, and counted here so nothing disappears ' +
+        'quietly: ' + trimmedParts.join('; ') + '.' });
+    }
+    if (data.summary.coveredByStronger) {
+      notes.push({ cls: 'warning', text: L.util.num(data.summary.coveredByStronger) + ' duplicate-name ' +
+        'finding(s) were folded into a combined-name finding that already proposes the same rename, so the ' +
+        'same artist is not listed twice.' });
+    }
     $('kpis').innerHTML = kpis.map(function (k) {
       return '<div class="kpi' + (k.lead ? ' lead' : '') + '"><b>' + escapeHtml(k.n) + '</b><span>' + escapeHtml(k.t) + '</span></div>';
-    }).join('') +
-      (data.summary.omitted
-        ? '<div class="alarm-box" style="grid-column:1/-1">' + L.util.num(data.summary.omitted) +
-          ' low-confidence findings were left out (name similarities or possible typos with no track in common). ' +
-          'They add nothing: looking similar is not proof of anything. The default rule requires at least one ' +
-          'shared track.</div>'
-        : '') +
-      (data.summary.coveredByStronger
-        ? '<div class="warning" style="grid-column:1/-1">' + L.util.num(data.summary.coveredByStronger) +
-          ' duplicate-name finding(s) were folded into a combined-name finding that already proposes the same ' +
-          'rename, so the same artist is not listed twice.</div>'
-        : '');
+    }).join('') + notes.map(function (note) {
+      return '<div class="' + note.cls + '">' + escapeHtml(note.text) + '</div>';
+    }).join('');
 
     if (m.warnings && m.warnings.length) showNotices(m.warnings);
 
-    var chips = [];
+    // Two independent filters, so they get two labelled rows: section and
+    // confidence were sharing one, which made them look like the same thing.
+    var sectionChips = ['<button class="chip" data-type="" aria-pressed="true">' +
+      '<span class="label">Everything</span><span class="n">' +
+      L.util.num(data.summary.findings) + '</span></button>'];
     data.summary.byType.forEach(function (t) {
-      chips.push('<button class="chip" data-type="' + escapeHtml(t.type) + '" aria-pressed="false">' +
-        escapeHtml(t.label) + '<span class="n">' + L.util.num(t.findings) + '</span></button>');
+      sectionChips.push('<button class="chip" data-type="' + escapeHtml(t.type) + '" aria-pressed="true">' +
+        '<span class="label">' + escapeHtml(t.label) + '</span><span class="n">' +
+        L.util.num(t.findings) + '</span></button>');
     });
-    $('typeChips').innerHTML =
-      '<button class="chip" data-type="" aria-pressed="true">Everything<span class="n">' +
-        L.util.num(data.summary.findings) + '</span></button>' +
-      chips.join('') +
-      '<span style="flex:1"></span>' +
-      ['high', 'medium', 'low'].map(function (level) {
-        return '<button class="chip" data-confidence="' + level + '" aria-pressed="false">' +
-          level.charAt(0).toUpperCase() + level.slice(1) + '</button>';
-      }).join('');
+    $('typeChips').innerHTML = sectionChips.join('');
+    syncSectionChips();
+    $('confidenceChips').innerHTML = ['high', 'medium', 'low'].map(function (level) {
+      return '<button class="chip" data-confidence="' + level + '" aria-pressed="false">' +
+        level.charAt(0).toUpperCase() + level.slice(1) + '</button>';
+    }).join('');
 
     $('typeChips').addEventListener('click', function (e) {
       var button = e.target.closest('button.chip');
       if (!button) return;
-      if (button.dataset.type !== undefined) {
-        filters.types = button.dataset.type ? [button.dataset.type] : null;
-      }
-      if (button.dataset.confidence) {
-        filters.confidence = filters.confidence === button.dataset.confidence ? null : button.dataset.confidence;
-      }
-      Array.prototype.forEach.call($('typeChips').querySelectorAll('.chip'), function (chip) {
-        if (chip.dataset.confidence) {
-          chip.setAttribute('aria-pressed', String(filters.confidence === chip.dataset.confidence));
-        } else if (chip.dataset.type !== undefined) {
-          var active = filters.types ? filters.types[0] === chip.dataset.type : chip.dataset.type === '';
-          chip.setAttribute('aria-pressed', String(active));
-        }
+      var type = button.dataset.type;
+      if (!type) filters.hidden = {}; // “Everything” switches every section back on
+      else if (filters.hidden[type]) delete filters.hidden[type];
+      else filters.hidden[type] = true;
+      syncSectionChips();
+      saveView();
+      renderList();
+    });
+
+    $('confidenceChips').addEventListener('click', function (e) {
+      var button = e.target.closest('button.chip');
+      if (!button) return;
+      filters.confidence = filters.confidence === button.dataset.confidence ? null : button.dataset.confidence;
+      Array.prototype.forEach.call($('confidenceChips').querySelectorAll('.chip'), function (chip) {
+        chip.setAttribute('aria-pressed', String(filters.confidence === chip.dataset.confidence));
       });
       renderList();
     });
@@ -2948,12 +4172,20 @@
       this.setAttribute('aria-pressed', String(filters.actionableOnly));
       renderList();
     });
-    $('compact').addEventListener('click', function () {
-      filters.compact = !filters.compact;
-      this.setAttribute('aria-pressed', String(filters.compact));
+    // Was a two-state button that silently did nothing on the big groups (they are
+    // compacted by size). A three-state control says what it will actually do.
+    $('density').addEventListener('change', function () {
+      filters.density = this.value;
       renderList();
     });
     $('printButton').addEventListener('click', function () { window.print(); });
+    $('resetDecisions').addEventListener('click', function () {
+      if (!Object.keys(decisions).length) return;
+      if (!window.confirm('Clear every Accept and Discard in this report?')) return;
+      decisions = {};
+      saveDecisions();
+      renderList();
+    });
     $('downloadMarkdown').addEventListener('click', function () {
       download('lastfm-report.md', L.toMarkdown(report), 'text/markdown');
     });
@@ -2962,6 +4194,9 @@
     });
     $('downloadJson').addEventListener('click', function () {
       download('lastfm-report.json', L.toJSON(report), 'application/json');
+    });
+    $('downloadWorklist').addEventListener('click', function () {
+      download('lastfm-todo.md', L.toWorklist(report, decisions), 'text/markdown');
     });
 
     renderList();
@@ -2979,113 +4214,255 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
-  /** Actions CSV with the `decision` column already filled in from the interface. */
+  /**
+   * Actions CSV with the `decision` column already filled in and the discarded
+   * rows left out. The engine builds it, so the columns can never drift from the
+   * file the CLI writes (the old version rebuilt the CSV by parsing its own
+   * text, which broke as soon as a cell contained a line break).
+   */
   function decisionsCsv() {
-    var parts = L.toCSV(report).split('\n');
-    var header = parts[0].split(';');
-    var decisionColumn = header.indexOf('decision');
-    var rows = [parts[0]];
-    for (var i = 1; i < parts.length; i++) {
-      var line = parts[i];
-      if (!line) continue;
-      var columns = splitCsvLine(line);
-      var decision = decisions[report.findings[i - 1].id] || 'pending';
-      if (decision === 'discard') continue;
-      columns[decisionColumn] = decision;
-      rows.push(columns.map(csvEscape).join(';'));
-    }
-    return rows.join('\n');
+    return L.toCSV(report, { decisions: decisions, omitDiscarded: true });
   }
 
-  function csvEscape(v) {
-    var s = v == null ? '' : String(v);
-    return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  var searchCache = {};
+
+  /**
+   * Everything a finding mentions, so that searching for an artist that only
+   * shows up in the evidence, in a signal or in a table also finds it.
+   */
+  function searchText(f) {
+    if (searchCache[f.id] == null) {
+      var parts = [f.title, f.current, f.proposed, f.explanation, f.warning, f.typeLabel, f.actionLabel];
+      (f.signals || []).forEach(function (s) { parts.push(s.text); });
+      (f.alternatives || []).forEach(function (a) { parts.push(a.value, a.reason); });
+      if (f.evidence && f.evidence.items) {
+        f.evidence.items.forEach(function (item) { parts.push(item.a, item.b); });
+      }
+      if (f.variants) {
+        f.variants.forEach(function (v) { parts.push(v.value); });
+      }
+      if (f.table && f.table.rows) {
+        f.table.rows.forEach(function (row) { parts.push(row.join(' ')); });
+      }
+      searchCache[f.id] = parts.join(' ').toLowerCase();
+    }
+    return searchCache[f.id];
   }
 
-  function splitCsvLine(line) {
-    var out = [];
-    var field = '';
-    var inQuotes = false;
-    for (var i = 0; i < line.length; i++) {
-      var c = line[i];
-      if (inQuotes) {
-        if (c === '"') {
-          if (line[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
-        } else field += c;
-      } else if (c === '"') inQuotes = true;
-      else if (c === ';') { out.push(field); field = ''; }
-      else field += c;
-    }
-    out.push(field);
-    return out;
+  /** The pressed state of the section chips, and their tooltips. */
+  function syncSectionChips() {
+    var anyHidden = Object.keys(filters.hidden).length > 0;
+    Array.prototype.forEach.call($('typeChips').querySelectorAll('button.chip'), function (chip) {
+      var type = chip.dataset.type;
+      var on = type === '' ? !anyHidden : !filters.hidden[type];
+      chip.setAttribute('aria-pressed', String(on));
+      chip.classList.toggle('off', type !== '' && !on);
+      chip.title = type === ''
+        ? (anyHidden ? 'Show every section again' : 'Every section is shown')
+        : (on ? 'Click to hide this section' : 'Section hidden — click to show it again');
+    });
   }
 
   function passesFilter(f) {
-    if (filters.types && filters.types.indexOf(f.type) < 0) return false;
+    if (filters.hidden[f.type]) return false;
     if (filters.confidence && f.confidence !== filters.confidence) return false;
-    if (filters.actionableOnly && f.action === 'review') return false;
+    // Advisory findings ("this may well be correct") are not work to do, so
+    // “Actionable only” drops them: it used to hide just two of 1,077.
+    if (filters.actionableOnly && !f.actionable) return false;
     if (decisions[f.id] === 'discard') return false;
-    if (filters.text) {
-      var haystack = [f.title, f.current, f.proposed, f.explanation].join(' ').toLowerCase();
-      if (haystack.indexOf(filters.text) < 0) return false;
-    }
+    if (filters.text && searchText(f).indexOf(filters.text) < 0) return false;
     return true;
+  }
+
+  function subtypeLabel(f) {
+    var label = L.subtypeLabel ? L.subtypeLabel(f.type, f.subtype) : '';
+    return label || f.subtype || '';
+  }
+
+  function sortFindings(list) {
+    var sorted = list.slice();
+    var rank = { high: 0, medium: 1, low: 2 };
+    if (filters.sort === 'impact') {
+      sorted.sort(function (a, b) {
+        return b.impact - a.impact || rank[a.confidence] - rank[b.confidence] || b.points - a.points;
+      });
+    } else {
+      sorted.sort(function (a, b) {
+        return rank[a.confidence] - rank[b.confidence] || b.impact - a.impact || b.points - a.points;
+      });
+    }
+    return sorted;
+  }
+
+  function totalImpact(list) {
+    return list.reduce(function (acc, f) { return acc + f.impact; }, 0);
+  }
+
+  function clearFilters() {
+    filters.hidden = {};
+    filters.confidence = null;
+    filters.text = '';
+    filters.actionableOnly = false;
+    $('search').value = '';
+    $('actionableOnly').setAttribute('aria-pressed', 'false');
+    syncSectionChips();
+    saveView();
+    Array.prototype.forEach.call($('confidenceChips').querySelectorAll('.chip'), function (chip) {
+      chip.setAttribute('aria-pressed', 'false');
+    });
+    renderList();
+  }
+
+  function findingById(id) {
+    for (var i = 0; i < report.findings.length; i++) {
+      if (report.findings[i].id === id) return report.findings[i];
+    }
+    return null;
+  }
+
+  /**
+   * Compact rows carry no card until they are opened. Embedding every card in a
+   * hidden div (the old behaviour) doubled the page for the 603 album findings.
+   */
+  function compactList(findings) {
+    return '<div class="compact-list">' + findings.map(function (f) {
+      var stateName = stateClass(decisions[f.id] || 'pending');
+      return '<div class="compact-row' + (stateName ? ' ' + stateName : '') +
+        '" data-open="' + escapeHtml(f.id) + '">' +
+        '<span class="tag e-' + f.confidence + '">' + f.confidence + '</span>' +
+        '<span class="t">' + escapeHtml(f.title) + '</span>' +
+        '<span class="i">' + L.util.num(f.impact) + ' sc.</span>' +
+        '<button class="quick" data-action="accept" data-id="' + escapeHtml(f.id) +
+        '" title="Add to your to-do list">✓</button>' +
+        '<button class="quick" data-action="discard" data-id="' + escapeHtml(f.id) +
+        '" title="Discard">✗</button></div>';
+    }).join('') + '</div>';
+  }
+
+  function findingBlocks(findings) {
+    if (filters.density === 'full') return findings.map(card).join('');
+    if (filters.density === 'compact' || findings.length > 25) return compactList(findings);
+    return findings.map(card).join('');
   }
 
   function renderList() {
     var visible = report.findings.filter(passesFilter);
-    if (filters.sort === 'impact') {
-      visible.sort(function (a, b) { return b.impact - a.impact || b.points - a.points; });
-    } else if (filters.sort === 'type') {
-      visible.sort(function (a, b) {
-        return L.TYPE_ORDER.indexOf(a.type) - L.TYPE_ORDER.indexOf(b.type) || b.impact - a.impact;
+    var html = [];
+    // The old sort control changed the order only inside each section, so it
+    // looked like it did nothing. Now the two “flat” modes really do reorder the
+    // whole list, which is what “what do I fix first?” needs.
+    var flat = filters.sort === 'impact' || filters.sort === 'confidence';
+    if (flat) {
+      var sorted = sortFindings(visible);
+      var hiddenTypes = Object.keys(filters.hidden);
+      html.push('<section class="group"><h2>' +
+        (filters.sort === 'impact' ? 'Biggest impact first' : 'Highest confidence first') +
+        ' <span class="group-summary">— ' + L.util.num(sorted.length) + ' finding(s), ' +
+        L.util.num(totalImpact(sorted)) + ' scrobbles affected' +
+        // In this mode the sections are not drawn, so the only place left to say
+        // which whole sections are switched off is here — with their names, because
+        // “1 section hidden” does not remind you which one.
+        (hiddenTypes.length
+          ? ' · switched off: ' +
+            escapeHtml(hiddenTypes.map(function (t) { return L.TYPE_LABELS[t] || t; }).join(', ')) +
+            ' <button class="button" data-show-sections="1">Show them</button>'
+          : '') +
+        '</span></h2>');
+      html.push(findingBlocks(sorted));
+      html.push('</section>');
+    } else {
+      var byType = {};
+      visible.forEach(function (f) {
+        (byType[f.type] = byType[f.type] || []).push(f);
+      });
+      L.TYPE_ORDER.forEach(function (type) {
+        var findings = byType[type];
+        if (!findings || !findings.length) return;
+        html.push('<section class="group"><h2>' + escapeHtml(L.TYPE_LABELS[type]) +
+          ' <span class="group-summary">— ' + L.util.num(findings.length) + ' finding(s), ' +
+          L.util.num(findings.filter(function (f) { return f.actionable; }).length) + ' actionable, ' +
+          L.util.num(totalImpact(findings)) + ' scrobbles affected</span></h2>');
+        // One heading per sub-case: “Albums” mixes filling in a missing album,
+        // reviewing a clash and merging a name, and they are different decisions.
+        var labels = (L.SUBTYPE_LABELS && L.SUBTYPE_LABELS[type]) || {};
+        var labelOrder = Object.keys(labels);
+        var groups = [];
+        labelOrder.forEach(function (subtype) {
+          var items = findings.filter(function (f) { return (f.subtype || '') === subtype; });
+          if (items.length) groups.push({ key: subtype, label: labels[subtype], items: items });
+        });
+        var rest = findings.filter(function (f) { return labelOrder.indexOf(f.subtype || '') < 0; });
+        if (rest.length) groups.push({ key: null, label: '', items: rest });
+        // Highest-scoring group first. Grouping by sub-case must never put a
+        // 52/100 above a 75/100 just because of the sub-case it belongs to. The
+        // position in SUBTYPE_LABELS is only the tie-breaker.
+        groups.forEach(function (group) {
+          group.best = group.items.reduce(function (max, f) {
+            return Math.max(max, f.points);
+          }, 0);
+        });
+        groups.sort(function (a, b) {
+          if (b.best !== a.best) return b.best - a.best;
+          var ia = a.key === null ? labelOrder.length : labelOrder.indexOf(a.key);
+          var ib = b.key === null ? labelOrder.length : labelOrder.indexOf(b.key);
+          return ia - ib;
+        });
+        if (groups.length > 1) {
+          groups.forEach(function (group) {
+            html.push('<h3 class="subtype">' + escapeHtml(group.label) + ' <span class="n">— ' +
+              L.util.num(group.items.length) + ' finding(s), ' + L.util.num(totalImpact(group.items)) +
+              ' scrobbles</span></h3>');
+            html.push(findingBlocks(group.items));
+          });
+        } else {
+          html.push(findingBlocks(findings));
+        }
+        html.push('</section>');
       });
     }
-    var byType = {};
-    visible.forEach(function (f) {
-      (byType[f.type] = byType[f.type] || []).push(f);
-    });
-    var html = [];
-    L.TYPE_ORDER.forEach(function (type) {
-      var findings = byType[type];
-      if (!findings || !findings.length) return;
-      var impact = findings.reduce(function (a, f) { return a + f.impact; }, 0);
-      var actionable = findings.filter(function (f) { return f.action !== 'review'; }).length;
-      html.push('<section class="group"><h2>' + escapeHtml(L.TYPE_LABELS[type]) +
-        ' <span class="group-summary">— ' + L.util.num(findings.length) + ' finding(s), ' +
-        L.util.num(actionable) + ' actionable, ' + L.util.num(impact) + ' scrobbles affected</span></h2>');
-      var compact = filters.compact || findings.length > 25;
-      if (compact) {
-        html.push('<div class="compact-list">');
-        findings.forEach(function (f) {
-          html.push('<div class="compact-row" data-open="' + escapeHtml(f.id) + '">' +
-            '<span class="tag e-' + f.confidence + '">' + f.confidence + '</span>' +
-            '<span class="t">' + escapeHtml(f.title) + '</span>' +
-            '<span class="i">' + L.util.num(f.impact) + ' sc.</span></div>' +
-            '<div class="hidden">' + card(f) + '</div>');
-        });
-        html.push('</div>');
-      } else {
-        findings.forEach(function (f) { html.push(card(f)); });
-      }
-      html.push('</section>');
-    });
-    if (!visible.length) html.push('<p class="note">Nothing to show with these filters.</p>');
+    if (!visible.length) {
+      html.push('<p class="note">Nothing to show with these filters. ' +
+        '<button class="button" data-clear="1">Clear filters</button></p>');
+    }
     $('list').innerHTML = html.join('');
-    $('filterState').textContent = visible.length + ' of ' + report.summary.findings + ' findings visible';
+    var accepted = 0;
+    var discarded = 0;
+    report.findings.forEach(function (f) {
+      if (decisions[f.id] === 'accept') accepted++;
+      else if (decisions[f.id] === 'discard') discarded++;
+    });
+    // Short on purpose: this shares the sticky row with the section chips.
+    $('filterState').textContent = L.util.num(visible.length) + ' shown · ' +
+      L.util.num(report.summary.actions) + ' actionable · ' + L.util.num(accepted) + ' accepted · ' +
+      L.util.num(discarded) + ' discarded';
+    var hiddenSections = Object.keys(filters.hidden).length;
+    $('filterState').setAttribute(
+      'title',
+      visible.length + ' of ' + report.summary.findings + ' findings visible with the current filters' +
+        (hiddenSections
+          ? '. ' + hiddenSections + ' section(s) switched off: click their chip again, or “Everything”, to show them'
+          : '')
+    );
+  }
+
+  /** 'accept' → 'accepted', 'discard' → 'discarded', anything else → ''. */
+  function stateClass(state) {
+    return state === 'accept' ? 'accepted' : state === 'discard' ? 'discarded' : '';
   }
 
   function card(f) {
     var state = decisions[f.id] || 'pending';
-    var className = state === 'discard' ? ' discarded' : state === 'accept' ? ' accepted' : '';
+    var stateName = stateClass(state);
+    var className = stateName ? ' ' + stateName : '';
     var html = [];
     html.push('<article class="card' + className + '" id="f-' + escapeHtml(f.id) + '">');
-    html.push('<h3>' + escapeHtml(f.title) + '</h3>');
+    html.push('<h4>' + escapeHtml(f.title) + '</h4>');
     html.push('<div class="tags">');
     html.push('<span class="tag e-' + f.confidence + '">' + f.confidence + ' · ' + f.points + '/100</span>');
     if (f.impact) html.push('<span class="tag e-info">' + L.util.num(f.impact) + ' scrobbles</span>');
     html.push('<span class="tag e-info">' + escapeHtml(f.actionLabel) + '</span>');
-    if (f.subtype) html.push('<span class="tag e-info">' + escapeHtml(f.subtype) + '</span>');
+    if (!f.actionable) html.push('<span class="tag e-low">advisory · may be fine</span>');
+    if (subtypeLabel(f)) html.push('<span class="tag e-info">' + escapeHtml(subtypeLabel(f)) + '</span>');
     html.push('</div>');
 
     if (f.current || f.proposed) {
@@ -3094,10 +4471,15 @@
     }
     var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
     if (alarms.length) {
-      html.push('<div class="alarm-box">Careful: ' + escapeHtml(alarms[0].text) + '</div>');
+      html.push('<div class="alarm-box">Careful: ' + alarms.map(function (s) {
+        return escapeHtml(s.text);
+      }).join('<br>') + '</div>');
     }
-    if (f.signals.length) {
-      html.push('<ul class="signals">' + f.signals.map(function (s) {
+    // The alarms are already spelled out in their own box, so they are not
+    // repeated in the list underneath.
+    var listed = f.signals.filter(function (s) { return s.level !== 'alarm'; });
+    if (listed.length) {
+      html.push('<ul class="signals">' + listed.map(function (s) {
         return '<li class="' + escapeHtml(s.level) + '">' + escapeHtml(s.text) + '</li>';
       }).join('') + '</ul>');
     }
@@ -3139,33 +4521,83 @@
     }
     html.push('<div class="decisions">' +
       '<button class="button" data-action="accept" data-id="' + escapeHtml(f.id) + '"' +
-      (state === 'accept' ? ' disabled' : '') + '>✓ Accept</button>' +
+      (state === 'accept' ? ' disabled' : '') + ' title="Add to your to-do list">✓ Accept</button>' +
       '<button class="button" data-action="discard" data-id="' + escapeHtml(f.id) + '"' +
-      (state === 'discard' ? ' disabled' : '') + '>✗ Discard</button>' +
+      (state === 'discard' ? ' disabled' : '') + ' title="Hide it here and drop it from actions.csv">✗ Discard</button>' +
       (state !== 'pending' ? '<button class="button" data-action="pending" data-id="' + escapeHtml(f.id) + '">↺ Back to pending</button>' : '') +
-      '<span class="state">' + (state === 'accept' ? 'marked to do' : state === 'discard' ? 'discarded (will not appear in the CSV)' : 'undecided') + '</span>' +
+      '<span class="state">' + (state === 'accept'
+        ? 'in your to-do list'
+        : state === 'discard'
+          ? 'discarded: hidden here, and left out of actions.csv'
+          : 'undecided') + '</span>' +
       '</div>');
     html.push('</article>');
     return html.join('');
   }
 
+  /**
+   * Printing a one-line-per-finding list gives you a list with no contents, so a
+   * print switches to “every card open” and then back again.
+   */
+  var densityBeforePrint = null;
+  window.addEventListener('beforeprint', function () {
+    if (!report) return;
+    densityBeforePrint = filters.density;
+    filters.density = 'full';
+    renderList();
+  });
+  window.addEventListener('afterprint', function () {
+    if (!report || densityBeforePrint == null) return;
+    filters.density = densityBeforePrint;
+    densityBeforePrint = null;
+    renderList();
+  });
+
   document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-clear]')) {
+      clearFilters();
+      return;
+    }
+    if (e.target.closest('[data-show-sections]')) {
+      filters.hidden = {};
+      syncSectionChips();
+      saveView();
+      renderList();
+      return;
+    }
     var button = e.target.closest('button[data-action]');
     if (button) {
       var id = button.dataset.id;
       if (button.dataset.action === 'pending') delete decisions[id];
       else decisions[id] = button.dataset.action;
       saveDecisions();
+      var finding = findingById(id);
       var cardElement = document.getElementById('f-' + id);
-      var finding = null;
-      for (var i = 0; i < report.findings.length && !finding; i++) {
-        if (report.findings[i].id === id) finding = report.findings[i];
-      }
       if (cardElement && finding) cardElement.outerHTML = card(finding);
+      var rows = document.querySelectorAll('.compact-row[data-open]');
+      for (var r = 0; r < rows.length; r++) {
+        if (rows[r].dataset.open === id) {
+          rows[r].classList.remove('accepted', 'discarded');
+          var marked = stateClass(decisions[id]);
+          if (marked) rows[r].classList.add(marked);
+        }
+      }
       return;
     }
     var row = e.target.closest('.compact-row[data-open]');
-    if (row && row.nextElementSibling) row.nextElementSibling.classList.toggle('hidden');
+    if (!row) return;
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('compact-detail')) {
+      next.classList.toggle('hidden');
+      return;
+    }
+    // The card is built the first time the row is opened, not before.
+    var opened = findingById(row.dataset.open);
+    if (!opened) return;
+    var detail = document.createElement('div');
+    detail.className = 'compact-detail';
+    detail.innerHTML = card(opened);
+    row.parentNode.insertBefore(detail, row.nextSibling);
   });
 
   /* ---------------- start-up ---------------- */

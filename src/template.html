@@ -97,11 +97,22 @@
   }
   .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
   .chip .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  /*
+   * A section chip is a switch, not a radio button: clicking it takes that section
+   * out of the list (and clicking it again brings it back). A section that is off
+   * has to look unmistakably off, or “why is my list shorter than yesterday?” has
+   * no answer on screen.
+   */
+  .chip.off { opacity: .45; border-style: dashed; }
+  .chip.off .label { text-decoration: line-through; }
+  /* Escape hatch in the heading of the flat sort modes, where no section heading
+     is drawn and a switched-off section would otherwise only show as a dimmed chip. */
+  .group-summary .button { font-size: 12px; padding: 2px 9px; margin-left: 6px; vertical-align: middle; }
   input[type=search], select {
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit;
   }
-  input[type=search] { min-width: 240px; flex: 1; }
+  input[type=search] { min-width: 200px; flex: 1 1 200px; }
   .button {
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; font-family: inherit;
@@ -118,7 +129,7 @@
   }
   .card.discarded { opacity: .45; }
   .card.accepted { border-color: var(--high); box-shadow: inset 3px 0 0 var(--high); }
-  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card h4 { margin: 0 0 6px; font-size: 16px; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
   .tag {
     font-size: 11.5px; border-radius: 999px; padding: 3px 9px; border: 1px solid transparent;
@@ -170,7 +181,53 @@
   .compact-row:hover { background: var(--page); }
   .compact-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .compact-row .i { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* A compact row can be decided without opening it. */
+  .compact-row .quick {
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border-radius: 6px; padding: 1px 7px; font-size: 12px; line-height: 1.5;
+    cursor: pointer; font-family: inherit;
+  }
+  .compact-row .quick:hover { border-color: var(--accent); color: var(--accent); }
+  .compact-row.accepted .quick[data-action="accept"],
+  .compact-row.discarded .quick[data-action="discard"] { opacity: .3; }
+  /* Downloads live in a menu so the sticky bar stays two rows tall. */
+  .menu { position: relative; margin-left: auto; }
+  .menu > summary { list-style: none; }
+  .menu > summary::-webkit-details-marker { display: none; }
+  .menu > summary::after { content: " ▾"; }
+  .menu[open] > summary::after { content: " ▴"; }
+  .menu-body {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .18); width: min(560px, 92vw);
+  }
+  .menu-body .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .compact-list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .compact-row.accepted { box-shadow: inset 3px 0 0 var(--high); }
+  .compact-row.discarded { opacity: .45; }
+  .compact-detail { padding: 6px 10px 12px; background: var(--page); border-bottom: 1px solid var(--border); }
+  section.group h3.subtype {
+    font-size: 12.5px; margin: 18px 0 8px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  section.group h3.subtype .n { font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .rowlabel {
+    color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+    min-width: 5.6rem;
+  }
+  /*
+   * Two variants on purpose. `flex: 1` here means `flex-basis: 0`, so a chip group
+   * sharing a crowded row was squeezed to no width at all, the chips overflowed
+   * their box and ended up underneath the search field. The group that has to give
+   * way is the one that can wrap safely, never the one next to a control.
+   */
+  .chiplist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+  .chiplist.grow { flex: 1 1 auto; }
+  .chiplist.fixed { flex: 0 0 auto; }
+  .note-box {
+    grid-column: 1/-1; background: var(--low-bg); color: var(--muted);
+    border-radius: 8px; padding: 8px 10px; font-size: 13.5px;
+  }
   .hidden { display: none !important; }
   .help h3 { font-size: 15px; margin: 16px 0 4px; }
   .help ul { margin: 4px 0; padding-left: 20px; }
@@ -179,7 +236,7 @@
   .errors { color: var(--alarm); font-size: 13.5px; }
   .loading { text-align: center; padding: 30px; color: var(--muted); }
   @media print {
-    .toolbar, .decisions, #dropzone, .button { display: none !important; }
+    .toolbar, .decisions, #dropzone, .button, .quick { display: none !important; }
     body { background: #fff; }
     .card { break-inside: avoid; }
   }
@@ -191,8 +248,9 @@
   <h1>Last.fm <span class="lens">Lens</span></h1>
   <p class="tagline">
     A magnifier for tidying up scrobbles: duplicate artists, combined artist names, inconsistent track
-    titles, missing or clashing albums, duplicate scrobbles and long-tail oddities. <strong>It edits
-    nothing:</strong> it tells you what to look at, with the evidence in plain sight.
+    titles (including likely typos), artist names repeated inside titles, missing or clashing albums,
+    duplicate scrobbles and long-tail oddities. <strong>It edits nothing:</strong> it tells you what to
+    look at, with the evidence in plain sight.
   </p>
 </header>
 
@@ -211,23 +269,46 @@
     <div class="kpis" id="kpis"></div>
 
     <div class="toolbar">
-      <div class="row" id="typeChips"></div>
-      <div class="row" style="margin-top:8px">
-        <input type="search" id="search" placeholder="Search artist, track, album…">
-        <select id="sort">
-          <option value="confidence">Sort: confidence and impact</option>
-          <option value="impact">Sort: impact</option>
-          <option value="type">Sort: category</option>
-        </select>
-        <button class="button" id="actionableOnly" aria-pressed="false">Actionable only</button>
-        <button class="button" id="compact" aria-pressed="false">Compact view</button>
+      <div class="row">
+        <span class="rowlabel" id="sectionLabel" title="Click a section to hide it, click it again to show it">Section</span>
+        <span class="chiplist grow" id="typeChips" role="group" aria-labelledby="sectionLabel"></span>
+        <span class="note" id="filterState"></span>
       </div>
       <div class="row" style="margin-top:8px">
-        <button class="button primary" id="downloadMarkdown">Download report.md</button>
-        <button class="button" id="downloadCsv">Download actions.csv</button>
-        <button class="button" id="downloadJson">Download JSON</button>
-        <button class="button" id="printButton">Print / PDF</button>
-        <span class="note" id="filterState"></span>
+        <span class="rowlabel" id="confidenceLabel">Confidence</span>
+        <span class="chiplist fixed" id="confidenceChips" role="group" aria-labelledby="confidenceLabel"></span>
+        <input type="search" id="search" placeholder="Search artist, track, album, evidence…">
+        <select id="sort" title="Grouped by category keeps the sections; the other two give one flat list">
+          <option value="category">Sort: grouped</option>
+          <option value="impact">Sort: by impact</option>
+          <option value="confidence">Sort: by confidence</option>
+        </select>
+        <select id="density" title="How much of each finding is shown">
+          <option value="auto">Density: auto</option>
+          <option value="compact">Density: compact</option>
+          <option value="full">Density: expanded</option>
+        </select>
+        <button class="button" id="actionableOnly" aria-pressed="false">Actionable only</button>
+        <details class="menu">
+          <summary class="button">Downloads &amp; help</summary>
+          <div class="menu-body">
+            <div class="row">
+              <button class="button primary" id="downloadWorklist">Download to-do list</button>
+              <button class="button" id="downloadMarkdown">Download report.md</button>
+              <button class="button" id="downloadCsv">Download actions.csv</button>
+              <button class="button" id="downloadJson">Download JSON</button>
+              <button class="button" id="printButton">Print / PDF</button>
+              <button class="button" id="resetDecisions">↺ Reset all decisions</button>
+            </div>
+            <p class="note" style="margin:10px 0 0">
+              ✓ <strong>Accept</strong> puts a finding in your to-do list · ✗ <strong>Discard</strong>
+              hides it here and drops it from <code>actions.csv</code> · ↺ undoes either one · neither of
+              them touches your Last.fm account.<br>
+              <em>auto</em> density shows the long groups as one line each, and those lines carry their own
+              ✓ / ✗ so a finding can be decided without opening it.
+            </p>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -248,19 +329,51 @@
       </p>
       <h3>Evidence rule</h3>
       <ul>
-        <li><strong>Sharing a track is required.</strong> An artist duplicate is only proposed when the two
-            names share at least one track, or when the names are identical bar capitalisation, accents or
-            punctuation. Looking similar on its own (starting with “Franc…”, say) never generates a finding.</li>
-        <li>Weak pairs are omitted and counted in the summary, so you always know what was left out. They can be
-            brought back with <code>minimumConfidence: 'low'</code>. Findings folded into a stronger one are
-            counted in the summary too, so nothing disappears quietly.</li>
+        <li><strong>Sharing a track is the strong proof.</strong> An artist rename is only proposed as work to
+            do when the two names share at least one track, or when they are identical bar capitalisation,
+            accents or punctuation. Looking similar is not proof on its own, so a pair of names that are alike
+            character by character but share <strong>no</strong> track is only ever an advisory question, never
+            a rename to do. The old “they start with the same letters” rule was deleted: it produced pairs
+            like <em>Clara Bell</em> / <em>Claudia Belmonte</em>.</li>
+        <li><strong>Confidence bands:</strong> high from <code>60</code> points, medium from <code>40</code>,
+            low below that (<code>RULES.highThreshold</code> / <code>RULES.mediumThreshold</code> in
+            <code>src/engine.js</code>).</li>
+        <li><strong>Order:</strong> inside a section the findings are grouped by sub-case, and the groups are
+            ordered by their strongest finding, so the highest-scoring ones come first. Within a group the
+            order is confidence, then impact, then points. The other two sort modes replace the sections with
+            a single flat list ordered by impact or by confidence.</li>
+        <li><strong>Nothing is dropped in silence.</strong> Checks that are made and not listed are counted in
+            the summary at the top: artist-name pairs with no track in common, album clashes below the minimum
+            impact, album-name variants past the cap, and findings under the minimum confidence. The last group
+            can be brought back with <code>minimumConfidence: 'low'</code>.</li>
+        <li><strong>Each section can be switched off.</strong> The section chips are switches, not a single
+            choice: click one to take that section out of the list (<em>Duplicate scrobbles</em>, say), click
+            it again to bring it back, and “Everything” switches them all back on. A section that is off is
+            dimmed and struck through. It matters most in the two flat sort modes, where the sections are not
+            drawn at all and the dimmed chip is the only sign that one is missing. The choice is remembered per
+            report, next to your Accept / Discard marks. In the two flat sort modes, where the sections are
+            not drawn, the heading names the sections that are off and carries a “Show them” button.</li>
+        <li><strong>Advisory findings are marked.</strong> Some cards say “this may well be correct, ignore it”
+            (a single and an album are different releases, or a live recording and the studio one, for
+            instance). They are labelled <em>advisory</em> and “Actionable only” hides them, so the count of
+            things to do stays honest.</li>
       </ul>
       <h3>What each section looks at</h3>
       <ul>
         <li><strong>Duplicate artists:</strong> two names pointing at the same artist. The strong proof is
             sharing tracks: if every track under “Ana” also sits under “Ana Beltrán”, it is almost certainly
             the same entry. It also counts whether their scrobbles mix within the same sitting (less than ten
-            minutes apart).</li>
+            minutes apart). Sub-cases: <em>identical names bar formatting</em>, <em>one name contained in the
+            other</em>, <em>several forms of the same artist</em>, <em>very similar names that share
+            tracks</em> and <em>very similar names with no shared track</em>.
+            The last two also compare the two names character by character, because a misspelling with more
+            than a couple of scrobbles used to be invisible: “Jana Burčeska” against “Jana Burcheska” is
+            proposed when they share a track, and merely asked about when they do not. Two names that differ
+            only by an underscore, a double space or a comma (“Senza_Cri” against “Senza Cri”) are identical
+            as far as the engine is concerned, so they need no threshold at all.
+            It also catches an abbreviation, where one name is the beginning of the other and every other
+            word is the same (“Cris Lora” against “Cristina Lora”), while keeping out pairs like “Clara
+            Bell” / “Claudia Belmonte”, where two words differ at once.</li>
         <li><strong>Combined artists:</strong> names such as “Ana, Bruno Salas y Cata”. These are flagged
             only when the <strong>first</strong> artist of the name exists separately in your library, and the
             proposal is exactly that first one (“Ana”). If the first one does not exist, the first that does is
@@ -272,12 +385,52 @@
             stands for. That is why “Ana Bruno” points at “Ana” and never at “Ana, Bruno”, and why a name already
             covered by a combined-name finding produces only one card rather than two saying the same thing.</li>
         <li><strong>Inconsistent track titles:</strong> the same track written in several ways under the same
-            artist (capitalisation, “(X)” versus “- X”, with or without a <code>feat.</code> credit).</li>
-        <li><strong>Albums:</strong> albums missing on some scrobbles but present on others, the same title split
-            across several albums (single versus album), and albums spelled in several ways.</li>
-        <li><strong>Duplicate scrobbles:</strong> the same track twice in a row less than a minute apart.</li>
-        <li><strong>Long tail:</strong> artists with one or two scrobbles, likely typos, garbled characters or
-            odd spacing.</li>
+            artist. Sub-cases: <em>formatting only</em>, <em>capitalisation only</em>, <em>qualifier written differently</em>, <em>featuring
+            credit in one form only</em>, <em>probably a typo in the title</em>, <em>titles carrying a platform
+            badge</em>, <em>probably a different
+            version (live, remix…)</em>, <em>with and without a qualifier</em>, <em>different
+            qualifiers</em>.
+            A platform badge is the junk a video page adds to an upload: “Song (Official Video)”, “Song
+            (Official Audio)”, “Song (Lyric Video)”, “Song (Video Oficial)”, “Song (Audio)”. It is worth a card
+            of its own because it points at where the scrobble came from — YouTube or Vevo rather than a music
+            player — and because it is invisible when <em>every</em> scrobble of a track carries it. The proposal
+            only ever removes the badge, never adds a credit, and the badge check is strict: the whole qualifier
+            has to be the badge, so real credits such as “from the Prime Video Original Movie” or “Official Song
+            UEFA Euro 2016” stay where they are.
+            Capitalisation alone is not damage: a name written twice with different capitals gets its own
+            sub-case, is advisory and never counts as work, because nothing is broken and nothing is lost.
+            An accent that went wrong, a broken quote or a stray space does count: those keep the high score.
+            A qualifier such as live, remix, acoustic or version marks a different recording, so those cases
+            get their own group, are marked <em>advisory</em> (they are decisions to make, not merges to do)
+            and never appear among the plain title variants. Their proposal prefers the plain form as the
+            target, because the qualified one explicitly claims something the others do not.
+            The typo check is deliberately narrow: same artist, both titles starting with the same letter, and
+            only when the rarer spelling is genuinely rare (at most three scrobbles). So “Patata” against
+            “Patataa” or “Papata” is proposed, while “Lugar I” against “Lugar II” is not: numbering is not a
+            typo. It only sees spelling, so the card warns you when a similar name could be a different song.</li>
+        <li><strong>Artist repeated in title:</strong> the Artist field already says “Ana” and the title repeats
+            it (“Ana - Something”). Typical of a badly tagged file or an import. The proposal removes the
+            repeated artist from the title; it only fires when the title really starts with the artist’s name
+            followed by a dash or a colon, so it stays quiet about titles that merely mention it.
+            When the same title also ends with a platform badge (“Ana - Something (Official Video)”), one single
+            card proposes the whole fix, badge included, instead of two cards proposing half a fix each.</li>
+        <li><strong>Albums:</strong> sub-cases <em>no album (another scrobble has one)</em>, <em>album name
+            written in several ways</em>, <em>capitalisation only</em> and <em>several albums for the same
+            title</em>.<br>
+            As with titles, two spellings that differ only in capitalisation are the same album either way, so
+            they are advisory and never counted as work. “Several albums for the same title” may be perfectly
+            correct (the single and the album are different things), so it is advisory too, and never counted
+            as work to do.
+            An album-name variant is only ever proposed <strong>inside one artist</strong>, because an album is
+            an (artist, album) pair: “Amnesia” by one artist and “AMNESIA” by another are two different
+            albums, not two spellings of one, and merging them would rewrite somebody else's album. When the
+            two spellings belong to two spellings of the <em>same</em> artist, that is the duplicate-artist
+            section's business: rename the artist first.</li>
+        <li><strong>Duplicate scrobbles:</strong> the same track twice in a row less than a minute apart. This
+            is the one section where the finding is a near-certainty rather than a suspicion.</li>
+        <li><strong>Long tail and oddities:</strong> sub-cases <em>probably a typo in the artist name</em>,
+            <em>formatting details inside tags</em>, <em>scrobbles with no album</em> and <em>artists with two
+            scrobbles or fewer</em>; the last three are informational lists, not mistakes.</li>
       </ul>
       <h3>What it does NOT do</h3>
       <ul>
@@ -300,7 +453,11 @@
             Last.fm offers to apply it to every scrobble of that combination (and renaming an artist affects the
             whole entry). It is a bulk change: look twice.</li>
         <li>Deleting a duplicate scrobble is one at a time, from the scrobble’s (⋯) menu.</li>
-        <li>Mark items “Accept” or “Discard” here and the actions CSV downloads with your decisions applied.</li>
+        <li><strong>Accept</strong> marks a finding as to do: it gets a green edge and appears in the
+            <strong>to-do list</strong>, which you download with its own button. <strong>Discard</strong> fades
+            the card, stops listing it and drops its row from <code>actions.csv</code>. Both can be undone
+            with “Back to pending”. Neither of them touches your Last.fm account, and the Markdown and JSON
+            downloads do not carry them: those are the report, not your working list.</li>
       </ul>
       <h3>Privacy</h3>
       <ul>
@@ -320,16 +477,57 @@
   var L = window.LastfmLens;
   var report = window.__REPORT__ || null;
   var decisions = {};
-  var filters = { types: null, confidence: null, text: '', actionableOnly: false, compact: false, sort: 'confidence' };
+  var storageKey = null;
+  var filters = { hidden: {}, confidence: null, text: '', actionableOnly: false, density: 'auto', sort: 'category' };
 
   var $ = function (id) { return document.getElementById(id); };
 
-  try {
-    decisions = JSON.parse(localStorage.getItem('lastfm-lens-decisions') || '{}') || {};
-  } catch (e) { decisions = {}; }
+  /**
+   * Decisions are kept per report, not per browser. A single shared key meant the
+   * Accept/Discard marks of one CSV showed up on top of another one.
+   */
+  function decisionsKey(data) {
+    if (!data || !data.meta) return 'lastfm-lens-decisions:empty';
+    var fingerprint = (data.meta.source || '') + '|' + (data.meta.scrobbles || 0);
+    var hash = 0;
+    for (var i = 0; i < fingerprint.length; i++) {
+      hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
+    }
+    return 'lastfm-lens-decisions:' + (hash >>> 0).toString(36);
+  }
+
+  function loadDecisions(data) {
+    storageKey = decisionsKey(data);
+    try {
+      decisions = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+    } catch (e) { decisions = {}; }
+  }
 
   function saveDecisions() {
-    try { localStorage.setItem('lastfm-lens-decisions', JSON.stringify(decisions)); } catch (e) {}
+    if (!storageKey) return;
+    try { localStorage.setItem(storageKey, JSON.stringify(decisions)); } catch (e) {}
+  }
+
+  /**
+   * The sections you switched off are remembered per report too, so a section you
+   * never want to look at (“Duplicate scrobbles”, say) is still out of the way the
+   * next time you open the same file. It is a separate key from the decisions on
+   * purpose: a view preference is not a decision about a finding.
+   */
+  function loadView() {
+    filters.hidden = {};
+    if (!storageKey) return;
+    try {
+      var saved = JSON.parse(localStorage.getItem(storageKey + ':view') || '{}') || {};
+      (saved.hiddenSections || []).forEach(function (type) { filters.hidden[type] = true; });
+    } catch (e) { filters.hidden = {}; }
+  }
+
+  function saveView() {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey + ':view', JSON.stringify({ hiddenSections: Object.keys(filters.hidden) }));
+    } catch (e) {}
   }
 
   function escapeHtml(s) {
@@ -400,6 +598,8 @@
   /* ---------------- rendering ---------------- */
 
   function render(data) {
+    loadDecisions(data);
+    loadView();
     $('results').classList.remove('hidden');
     var m = data.meta;
     var affectedPct = m.scrobbles ? Math.round(100 * data.summary.affectedScrobbles / m.scrobbles) : 0;
@@ -409,58 +609,86 @@
       { n: L.util.num(m.tracks), t: 'tracks' },
       { n: L.util.num(m.albums), t: 'albums' },
       { n: L.util.shortDate(m.from) + ' → ' + L.util.shortDate(m.to), t: 'period' },
-      { n: L.util.num(data.summary.affectedScrobbles) + ' (' + affectedPct + '%)', t: 'scrobbles affected', lead: true },
+      { n: L.util.num(data.summary.affectedScrobbles) + ' (' + affectedPct + '%)', t: 'scrobbles looked at', lead: true },
       { n: L.util.num(data.summary.highConfidenceActions), t: 'high-confidence actions', lead: true },
+      { n: L.util.num(data.summary.findings - data.summary.actions), t: 'advisory (may be fine)' },
       { n: L.util.num(data.summary.findings), t: 'findings in total' }
     ];
+
+    // Everything a detector checked and chose not to list is said out loud here,
+    // instead of disappearing. This is also where the counts that used to be
+    // dropped in silence (the album-variant cap above all) show up.
+    var notes = [];
+    var trimmed = data.summary.trimmed || {};
+    var trimmedParts = [];
+    if (trimmed.artistPairsWithoutSharedTrack) {
+      trimmedParts.push(L.util.num(trimmed.artistPairsWithoutSharedTrack) +
+        ' artist-name pair(s) that share no track (looking similar is not evidence)');
+    }
+    if (trimmed.albumClashesBelowThreshold) {
+      trimmedParts.push(L.util.num(trimmed.albumClashesBelowThreshold) + ' album clash(es) below ' +
+        L.util.num(m.rules.minAlbumImpact) + ' affected scrobbles');
+    }
+    if (trimmed.albumNameVariantsBeyondCap) {
+      trimmedParts.push(L.util.num(trimmed.albumNameVariantsBeyondCap) + ' album-name variant(s) past the ' +
+        L.util.num(m.rules.maxAlbumNameVariants) + ' listed (raise RULES.maxAlbumNameVariants to see them)');
+    }
+    if (data.summary.omitted) {
+      trimmedParts.push(L.util.num(data.summary.omitted) + ' finding(s) under the minimum confidence (' +
+        (data.summary.minimumConfidence || 'medium') + ')');
+    }
+    if (trimmedParts.length) {
+      notes.push({ cls: 'note-box', text: 'Not listed on purpose, and counted here so nothing disappears ' +
+        'quietly: ' + trimmedParts.join('; ') + '.' });
+    }
+    if (data.summary.coveredByStronger) {
+      notes.push({ cls: 'warning', text: L.util.num(data.summary.coveredByStronger) + ' duplicate-name ' +
+        'finding(s) were folded into a combined-name finding that already proposes the same rename, so the ' +
+        'same artist is not listed twice.' });
+    }
     $('kpis').innerHTML = kpis.map(function (k) {
       return '<div class="kpi' + (k.lead ? ' lead' : '') + '"><b>' + escapeHtml(k.n) + '</b><span>' + escapeHtml(k.t) + '</span></div>';
-    }).join('') +
-      (data.summary.omitted
-        ? '<div class="alarm-box" style="grid-column:1/-1">' + L.util.num(data.summary.omitted) +
-          ' low-confidence findings were left out (name similarities or possible typos with no track in common). ' +
-          'They add nothing: looking similar is not proof of anything. The default rule requires at least one ' +
-          'shared track.</div>'
-        : '') +
-      (data.summary.coveredByStronger
-        ? '<div class="warning" style="grid-column:1/-1">' + L.util.num(data.summary.coveredByStronger) +
-          ' duplicate-name finding(s) were folded into a combined-name finding that already proposes the same ' +
-          'rename, so the same artist is not listed twice.</div>'
-        : '');
+    }).join('') + notes.map(function (note) {
+      return '<div class="' + note.cls + '">' + escapeHtml(note.text) + '</div>';
+    }).join('');
 
     if (m.warnings && m.warnings.length) showNotices(m.warnings);
 
-    var chips = [];
+    // Two independent filters, so they get two labelled rows: section and
+    // confidence were sharing one, which made them look like the same thing.
+    var sectionChips = ['<button class="chip" data-type="" aria-pressed="true">' +
+      '<span class="label">Everything</span><span class="n">' +
+      L.util.num(data.summary.findings) + '</span></button>'];
     data.summary.byType.forEach(function (t) {
-      chips.push('<button class="chip" data-type="' + escapeHtml(t.type) + '" aria-pressed="false">' +
-        escapeHtml(t.label) + '<span class="n">' + L.util.num(t.findings) + '</span></button>');
+      sectionChips.push('<button class="chip" data-type="' + escapeHtml(t.type) + '" aria-pressed="true">' +
+        '<span class="label">' + escapeHtml(t.label) + '</span><span class="n">' +
+        L.util.num(t.findings) + '</span></button>');
     });
-    $('typeChips').innerHTML =
-      '<button class="chip" data-type="" aria-pressed="true">Everything<span class="n">' +
-        L.util.num(data.summary.findings) + '</span></button>' +
-      chips.join('') +
-      '<span style="flex:1"></span>' +
-      ['high', 'medium', 'low'].map(function (level) {
-        return '<button class="chip" data-confidence="' + level + '" aria-pressed="false">' +
-          level.charAt(0).toUpperCase() + level.slice(1) + '</button>';
-      }).join('');
+    $('typeChips').innerHTML = sectionChips.join('');
+    syncSectionChips();
+    $('confidenceChips').innerHTML = ['high', 'medium', 'low'].map(function (level) {
+      return '<button class="chip" data-confidence="' + level + '" aria-pressed="false">' +
+        level.charAt(0).toUpperCase() + level.slice(1) + '</button>';
+    }).join('');
 
     $('typeChips').addEventListener('click', function (e) {
       var button = e.target.closest('button.chip');
       if (!button) return;
-      if (button.dataset.type !== undefined) {
-        filters.types = button.dataset.type ? [button.dataset.type] : null;
-      }
-      if (button.dataset.confidence) {
-        filters.confidence = filters.confidence === button.dataset.confidence ? null : button.dataset.confidence;
-      }
-      Array.prototype.forEach.call($('typeChips').querySelectorAll('.chip'), function (chip) {
-        if (chip.dataset.confidence) {
-          chip.setAttribute('aria-pressed', String(filters.confidence === chip.dataset.confidence));
-        } else if (chip.dataset.type !== undefined) {
-          var active = filters.types ? filters.types[0] === chip.dataset.type : chip.dataset.type === '';
-          chip.setAttribute('aria-pressed', String(active));
-        }
+      var type = button.dataset.type;
+      if (!type) filters.hidden = {}; // “Everything” switches every section back on
+      else if (filters.hidden[type]) delete filters.hidden[type];
+      else filters.hidden[type] = true;
+      syncSectionChips();
+      saveView();
+      renderList();
+    });
+
+    $('confidenceChips').addEventListener('click', function (e) {
+      var button = e.target.closest('button.chip');
+      if (!button) return;
+      filters.confidence = filters.confidence === button.dataset.confidence ? null : button.dataset.confidence;
+      Array.prototype.forEach.call($('confidenceChips').querySelectorAll('.chip'), function (chip) {
+        chip.setAttribute('aria-pressed', String(filters.confidence === chip.dataset.confidence));
       });
       renderList();
     });
@@ -478,12 +706,20 @@
       this.setAttribute('aria-pressed', String(filters.actionableOnly));
       renderList();
     });
-    $('compact').addEventListener('click', function () {
-      filters.compact = !filters.compact;
-      this.setAttribute('aria-pressed', String(filters.compact));
+    // Was a two-state button that silently did nothing on the big groups (they are
+    // compacted by size). A three-state control says what it will actually do.
+    $('density').addEventListener('change', function () {
+      filters.density = this.value;
       renderList();
     });
     $('printButton').addEventListener('click', function () { window.print(); });
+    $('resetDecisions').addEventListener('click', function () {
+      if (!Object.keys(decisions).length) return;
+      if (!window.confirm('Clear every Accept and Discard in this report?')) return;
+      decisions = {};
+      saveDecisions();
+      renderList();
+    });
     $('downloadMarkdown').addEventListener('click', function () {
       download('lastfm-report.md', L.toMarkdown(report), 'text/markdown');
     });
@@ -492,6 +728,9 @@
     });
     $('downloadJson').addEventListener('click', function () {
       download('lastfm-report.json', L.toJSON(report), 'application/json');
+    });
+    $('downloadWorklist').addEventListener('click', function () {
+      download('lastfm-todo.md', L.toWorklist(report, decisions), 'text/markdown');
     });
 
     renderList();
@@ -509,113 +748,255 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
-  /** Actions CSV with the `decision` column already filled in from the interface. */
+  /**
+   * Actions CSV with the `decision` column already filled in and the discarded
+   * rows left out. The engine builds it, so the columns can never drift from the
+   * file the CLI writes (the old version rebuilt the CSV by parsing its own
+   * text, which broke as soon as a cell contained a line break).
+   */
   function decisionsCsv() {
-    var parts = L.toCSV(report).split('\n');
-    var header = parts[0].split(';');
-    var decisionColumn = header.indexOf('decision');
-    var rows = [parts[0]];
-    for (var i = 1; i < parts.length; i++) {
-      var line = parts[i];
-      if (!line) continue;
-      var columns = splitCsvLine(line);
-      var decision = decisions[report.findings[i - 1].id] || 'pending';
-      if (decision === 'discard') continue;
-      columns[decisionColumn] = decision;
-      rows.push(columns.map(csvEscape).join(';'));
-    }
-    return rows.join('\n');
+    return L.toCSV(report, { decisions: decisions, omitDiscarded: true });
   }
 
-  function csvEscape(v) {
-    var s = v == null ? '' : String(v);
-    return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  var searchCache = {};
+
+  /**
+   * Everything a finding mentions, so that searching for an artist that only
+   * shows up in the evidence, in a signal or in a table also finds it.
+   */
+  function searchText(f) {
+    if (searchCache[f.id] == null) {
+      var parts = [f.title, f.current, f.proposed, f.explanation, f.warning, f.typeLabel, f.actionLabel];
+      (f.signals || []).forEach(function (s) { parts.push(s.text); });
+      (f.alternatives || []).forEach(function (a) { parts.push(a.value, a.reason); });
+      if (f.evidence && f.evidence.items) {
+        f.evidence.items.forEach(function (item) { parts.push(item.a, item.b); });
+      }
+      if (f.variants) {
+        f.variants.forEach(function (v) { parts.push(v.value); });
+      }
+      if (f.table && f.table.rows) {
+        f.table.rows.forEach(function (row) { parts.push(row.join(' ')); });
+      }
+      searchCache[f.id] = parts.join(' ').toLowerCase();
+    }
+    return searchCache[f.id];
   }
 
-  function splitCsvLine(line) {
-    var out = [];
-    var field = '';
-    var inQuotes = false;
-    for (var i = 0; i < line.length; i++) {
-      var c = line[i];
-      if (inQuotes) {
-        if (c === '"') {
-          if (line[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
-        } else field += c;
-      } else if (c === '"') inQuotes = true;
-      else if (c === ';') { out.push(field); field = ''; }
-      else field += c;
-    }
-    out.push(field);
-    return out;
+  /** The pressed state of the section chips, and their tooltips. */
+  function syncSectionChips() {
+    var anyHidden = Object.keys(filters.hidden).length > 0;
+    Array.prototype.forEach.call($('typeChips').querySelectorAll('button.chip'), function (chip) {
+      var type = chip.dataset.type;
+      var on = type === '' ? !anyHidden : !filters.hidden[type];
+      chip.setAttribute('aria-pressed', String(on));
+      chip.classList.toggle('off', type !== '' && !on);
+      chip.title = type === ''
+        ? (anyHidden ? 'Show every section again' : 'Every section is shown')
+        : (on ? 'Click to hide this section' : 'Section hidden — click to show it again');
+    });
   }
 
   function passesFilter(f) {
-    if (filters.types && filters.types.indexOf(f.type) < 0) return false;
+    if (filters.hidden[f.type]) return false;
     if (filters.confidence && f.confidence !== filters.confidence) return false;
-    if (filters.actionableOnly && f.action === 'review') return false;
+    // Advisory findings ("this may well be correct") are not work to do, so
+    // “Actionable only” drops them: it used to hide just two of 1,077.
+    if (filters.actionableOnly && !f.actionable) return false;
     if (decisions[f.id] === 'discard') return false;
-    if (filters.text) {
-      var haystack = [f.title, f.current, f.proposed, f.explanation].join(' ').toLowerCase();
-      if (haystack.indexOf(filters.text) < 0) return false;
-    }
+    if (filters.text && searchText(f).indexOf(filters.text) < 0) return false;
     return true;
+  }
+
+  function subtypeLabel(f) {
+    var label = L.subtypeLabel ? L.subtypeLabel(f.type, f.subtype) : '';
+    return label || f.subtype || '';
+  }
+
+  function sortFindings(list) {
+    var sorted = list.slice();
+    var rank = { high: 0, medium: 1, low: 2 };
+    if (filters.sort === 'impact') {
+      sorted.sort(function (a, b) {
+        return b.impact - a.impact || rank[a.confidence] - rank[b.confidence] || b.points - a.points;
+      });
+    } else {
+      sorted.sort(function (a, b) {
+        return rank[a.confidence] - rank[b.confidence] || b.impact - a.impact || b.points - a.points;
+      });
+    }
+    return sorted;
+  }
+
+  function totalImpact(list) {
+    return list.reduce(function (acc, f) { return acc + f.impact; }, 0);
+  }
+
+  function clearFilters() {
+    filters.hidden = {};
+    filters.confidence = null;
+    filters.text = '';
+    filters.actionableOnly = false;
+    $('search').value = '';
+    $('actionableOnly').setAttribute('aria-pressed', 'false');
+    syncSectionChips();
+    saveView();
+    Array.prototype.forEach.call($('confidenceChips').querySelectorAll('.chip'), function (chip) {
+      chip.setAttribute('aria-pressed', 'false');
+    });
+    renderList();
+  }
+
+  function findingById(id) {
+    for (var i = 0; i < report.findings.length; i++) {
+      if (report.findings[i].id === id) return report.findings[i];
+    }
+    return null;
+  }
+
+  /**
+   * Compact rows carry no card until they are opened. Embedding every card in a
+   * hidden div (the old behaviour) doubled the page for the 603 album findings.
+   */
+  function compactList(findings) {
+    return '<div class="compact-list">' + findings.map(function (f) {
+      var stateName = stateClass(decisions[f.id] || 'pending');
+      return '<div class="compact-row' + (stateName ? ' ' + stateName : '') +
+        '" data-open="' + escapeHtml(f.id) + '">' +
+        '<span class="tag e-' + f.confidence + '">' + f.confidence + '</span>' +
+        '<span class="t">' + escapeHtml(f.title) + '</span>' +
+        '<span class="i">' + L.util.num(f.impact) + ' sc.</span>' +
+        '<button class="quick" data-action="accept" data-id="' + escapeHtml(f.id) +
+        '" title="Add to your to-do list">✓</button>' +
+        '<button class="quick" data-action="discard" data-id="' + escapeHtml(f.id) +
+        '" title="Discard">✗</button></div>';
+    }).join('') + '</div>';
+  }
+
+  function findingBlocks(findings) {
+    if (filters.density === 'full') return findings.map(card).join('');
+    if (filters.density === 'compact' || findings.length > 25) return compactList(findings);
+    return findings.map(card).join('');
   }
 
   function renderList() {
     var visible = report.findings.filter(passesFilter);
-    if (filters.sort === 'impact') {
-      visible.sort(function (a, b) { return b.impact - a.impact || b.points - a.points; });
-    } else if (filters.sort === 'type') {
-      visible.sort(function (a, b) {
-        return L.TYPE_ORDER.indexOf(a.type) - L.TYPE_ORDER.indexOf(b.type) || b.impact - a.impact;
+    var html = [];
+    // The old sort control changed the order only inside each section, so it
+    // looked like it did nothing. Now the two “flat” modes really do reorder the
+    // whole list, which is what “what do I fix first?” needs.
+    var flat = filters.sort === 'impact' || filters.sort === 'confidence';
+    if (flat) {
+      var sorted = sortFindings(visible);
+      var hiddenTypes = Object.keys(filters.hidden);
+      html.push('<section class="group"><h2>' +
+        (filters.sort === 'impact' ? 'Biggest impact first' : 'Highest confidence first') +
+        ' <span class="group-summary">— ' + L.util.num(sorted.length) + ' finding(s), ' +
+        L.util.num(totalImpact(sorted)) + ' scrobbles affected' +
+        // In this mode the sections are not drawn, so the only place left to say
+        // which whole sections are switched off is here — with their names, because
+        // “1 section hidden” does not remind you which one.
+        (hiddenTypes.length
+          ? ' · switched off: ' +
+            escapeHtml(hiddenTypes.map(function (t) { return L.TYPE_LABELS[t] || t; }).join(', ')) +
+            ' <button class="button" data-show-sections="1">Show them</button>'
+          : '') +
+        '</span></h2>');
+      html.push(findingBlocks(sorted));
+      html.push('</section>');
+    } else {
+      var byType = {};
+      visible.forEach(function (f) {
+        (byType[f.type] = byType[f.type] || []).push(f);
+      });
+      L.TYPE_ORDER.forEach(function (type) {
+        var findings = byType[type];
+        if (!findings || !findings.length) return;
+        html.push('<section class="group"><h2>' + escapeHtml(L.TYPE_LABELS[type]) +
+          ' <span class="group-summary">— ' + L.util.num(findings.length) + ' finding(s), ' +
+          L.util.num(findings.filter(function (f) { return f.actionable; }).length) + ' actionable, ' +
+          L.util.num(totalImpact(findings)) + ' scrobbles affected</span></h2>');
+        // One heading per sub-case: “Albums” mixes filling in a missing album,
+        // reviewing a clash and merging a name, and they are different decisions.
+        var labels = (L.SUBTYPE_LABELS && L.SUBTYPE_LABELS[type]) || {};
+        var labelOrder = Object.keys(labels);
+        var groups = [];
+        labelOrder.forEach(function (subtype) {
+          var items = findings.filter(function (f) { return (f.subtype || '') === subtype; });
+          if (items.length) groups.push({ key: subtype, label: labels[subtype], items: items });
+        });
+        var rest = findings.filter(function (f) { return labelOrder.indexOf(f.subtype || '') < 0; });
+        if (rest.length) groups.push({ key: null, label: '', items: rest });
+        // Highest-scoring group first. Grouping by sub-case must never put a
+        // 52/100 above a 75/100 just because of the sub-case it belongs to. The
+        // position in SUBTYPE_LABELS is only the tie-breaker.
+        groups.forEach(function (group) {
+          group.best = group.items.reduce(function (max, f) {
+            return Math.max(max, f.points);
+          }, 0);
+        });
+        groups.sort(function (a, b) {
+          if (b.best !== a.best) return b.best - a.best;
+          var ia = a.key === null ? labelOrder.length : labelOrder.indexOf(a.key);
+          var ib = b.key === null ? labelOrder.length : labelOrder.indexOf(b.key);
+          return ia - ib;
+        });
+        if (groups.length > 1) {
+          groups.forEach(function (group) {
+            html.push('<h3 class="subtype">' + escapeHtml(group.label) + ' <span class="n">— ' +
+              L.util.num(group.items.length) + ' finding(s), ' + L.util.num(totalImpact(group.items)) +
+              ' scrobbles</span></h3>');
+            html.push(findingBlocks(group.items));
+          });
+        } else {
+          html.push(findingBlocks(findings));
+        }
+        html.push('</section>');
       });
     }
-    var byType = {};
-    visible.forEach(function (f) {
-      (byType[f.type] = byType[f.type] || []).push(f);
-    });
-    var html = [];
-    L.TYPE_ORDER.forEach(function (type) {
-      var findings = byType[type];
-      if (!findings || !findings.length) return;
-      var impact = findings.reduce(function (a, f) { return a + f.impact; }, 0);
-      var actionable = findings.filter(function (f) { return f.action !== 'review'; }).length;
-      html.push('<section class="group"><h2>' + escapeHtml(L.TYPE_LABELS[type]) +
-        ' <span class="group-summary">— ' + L.util.num(findings.length) + ' finding(s), ' +
-        L.util.num(actionable) + ' actionable, ' + L.util.num(impact) + ' scrobbles affected</span></h2>');
-      var compact = filters.compact || findings.length > 25;
-      if (compact) {
-        html.push('<div class="compact-list">');
-        findings.forEach(function (f) {
-          html.push('<div class="compact-row" data-open="' + escapeHtml(f.id) + '">' +
-            '<span class="tag e-' + f.confidence + '">' + f.confidence + '</span>' +
-            '<span class="t">' + escapeHtml(f.title) + '</span>' +
-            '<span class="i">' + L.util.num(f.impact) + ' sc.</span></div>' +
-            '<div class="hidden">' + card(f) + '</div>');
-        });
-        html.push('</div>');
-      } else {
-        findings.forEach(function (f) { html.push(card(f)); });
-      }
-      html.push('</section>');
-    });
-    if (!visible.length) html.push('<p class="note">Nothing to show with these filters.</p>');
+    if (!visible.length) {
+      html.push('<p class="note">Nothing to show with these filters. ' +
+        '<button class="button" data-clear="1">Clear filters</button></p>');
+    }
     $('list').innerHTML = html.join('');
-    $('filterState').textContent = visible.length + ' of ' + report.summary.findings + ' findings visible';
+    var accepted = 0;
+    var discarded = 0;
+    report.findings.forEach(function (f) {
+      if (decisions[f.id] === 'accept') accepted++;
+      else if (decisions[f.id] === 'discard') discarded++;
+    });
+    // Short on purpose: this shares the sticky row with the section chips.
+    $('filterState').textContent = L.util.num(visible.length) + ' shown · ' +
+      L.util.num(report.summary.actions) + ' actionable · ' + L.util.num(accepted) + ' accepted · ' +
+      L.util.num(discarded) + ' discarded';
+    var hiddenSections = Object.keys(filters.hidden).length;
+    $('filterState').setAttribute(
+      'title',
+      visible.length + ' of ' + report.summary.findings + ' findings visible with the current filters' +
+        (hiddenSections
+          ? '. ' + hiddenSections + ' section(s) switched off: click their chip again, or “Everything”, to show them'
+          : '')
+    );
+  }
+
+  /** 'accept' → 'accepted', 'discard' → 'discarded', anything else → ''. */
+  function stateClass(state) {
+    return state === 'accept' ? 'accepted' : state === 'discard' ? 'discarded' : '';
   }
 
   function card(f) {
     var state = decisions[f.id] || 'pending';
-    var className = state === 'discard' ? ' discarded' : state === 'accept' ? ' accepted' : '';
+    var stateName = stateClass(state);
+    var className = stateName ? ' ' + stateName : '';
     var html = [];
     html.push('<article class="card' + className + '" id="f-' + escapeHtml(f.id) + '">');
-    html.push('<h3>' + escapeHtml(f.title) + '</h3>');
+    html.push('<h4>' + escapeHtml(f.title) + '</h4>');
     html.push('<div class="tags">');
     html.push('<span class="tag e-' + f.confidence + '">' + f.confidence + ' · ' + f.points + '/100</span>');
     if (f.impact) html.push('<span class="tag e-info">' + L.util.num(f.impact) + ' scrobbles</span>');
     html.push('<span class="tag e-info">' + escapeHtml(f.actionLabel) + '</span>');
-    if (f.subtype) html.push('<span class="tag e-info">' + escapeHtml(f.subtype) + '</span>');
+    if (!f.actionable) html.push('<span class="tag e-low">advisory · may be fine</span>');
+    if (subtypeLabel(f)) html.push('<span class="tag e-info">' + escapeHtml(subtypeLabel(f)) + '</span>');
     html.push('</div>');
 
     if (f.current || f.proposed) {
@@ -624,10 +1005,15 @@
     }
     var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
     if (alarms.length) {
-      html.push('<div class="alarm-box">Careful: ' + escapeHtml(alarms[0].text) + '</div>');
+      html.push('<div class="alarm-box">Careful: ' + alarms.map(function (s) {
+        return escapeHtml(s.text);
+      }).join('<br>') + '</div>');
     }
-    if (f.signals.length) {
-      html.push('<ul class="signals">' + f.signals.map(function (s) {
+    // The alarms are already spelled out in their own box, so they are not
+    // repeated in the list underneath.
+    var listed = f.signals.filter(function (s) { return s.level !== 'alarm'; });
+    if (listed.length) {
+      html.push('<ul class="signals">' + listed.map(function (s) {
         return '<li class="' + escapeHtml(s.level) + '">' + escapeHtml(s.text) + '</li>';
       }).join('') + '</ul>');
     }
@@ -669,33 +1055,83 @@
     }
     html.push('<div class="decisions">' +
       '<button class="button" data-action="accept" data-id="' + escapeHtml(f.id) + '"' +
-      (state === 'accept' ? ' disabled' : '') + '>✓ Accept</button>' +
+      (state === 'accept' ? ' disabled' : '') + ' title="Add to your to-do list">✓ Accept</button>' +
       '<button class="button" data-action="discard" data-id="' + escapeHtml(f.id) + '"' +
-      (state === 'discard' ? ' disabled' : '') + '>✗ Discard</button>' +
+      (state === 'discard' ? ' disabled' : '') + ' title="Hide it here and drop it from actions.csv">✗ Discard</button>' +
       (state !== 'pending' ? '<button class="button" data-action="pending" data-id="' + escapeHtml(f.id) + '">↺ Back to pending</button>' : '') +
-      '<span class="state">' + (state === 'accept' ? 'marked to do' : state === 'discard' ? 'discarded (will not appear in the CSV)' : 'undecided') + '</span>' +
+      '<span class="state">' + (state === 'accept'
+        ? 'in your to-do list'
+        : state === 'discard'
+          ? 'discarded: hidden here, and left out of actions.csv'
+          : 'undecided') + '</span>' +
       '</div>');
     html.push('</article>');
     return html.join('');
   }
 
+  /**
+   * Printing a one-line-per-finding list gives you a list with no contents, so a
+   * print switches to “every card open” and then back again.
+   */
+  var densityBeforePrint = null;
+  window.addEventListener('beforeprint', function () {
+    if (!report) return;
+    densityBeforePrint = filters.density;
+    filters.density = 'full';
+    renderList();
+  });
+  window.addEventListener('afterprint', function () {
+    if (!report || densityBeforePrint == null) return;
+    filters.density = densityBeforePrint;
+    densityBeforePrint = null;
+    renderList();
+  });
+
   document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-clear]')) {
+      clearFilters();
+      return;
+    }
+    if (e.target.closest('[data-show-sections]')) {
+      filters.hidden = {};
+      syncSectionChips();
+      saveView();
+      renderList();
+      return;
+    }
     var button = e.target.closest('button[data-action]');
     if (button) {
       var id = button.dataset.id;
       if (button.dataset.action === 'pending') delete decisions[id];
       else decisions[id] = button.dataset.action;
       saveDecisions();
+      var finding = findingById(id);
       var cardElement = document.getElementById('f-' + id);
-      var finding = null;
-      for (var i = 0; i < report.findings.length && !finding; i++) {
-        if (report.findings[i].id === id) finding = report.findings[i];
-      }
       if (cardElement && finding) cardElement.outerHTML = card(finding);
+      var rows = document.querySelectorAll('.compact-row[data-open]');
+      for (var r = 0; r < rows.length; r++) {
+        if (rows[r].dataset.open === id) {
+          rows[r].classList.remove('accepted', 'discarded');
+          var marked = stateClass(decisions[id]);
+          if (marked) rows[r].classList.add(marked);
+        }
+      }
       return;
     }
     var row = e.target.closest('.compact-row[data-open]');
-    if (row && row.nextElementSibling) row.nextElementSibling.classList.toggle('hidden');
+    if (!row) return;
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('compact-detail')) {
+      next.classList.toggle('hidden');
+      return;
+    }
+    // The card is built the first time the row is opened, not before.
+    var opened = findingById(row.dataset.open);
+    if (!opened) return;
+    var detail = document.createElement('div');
+    detail.className = 'compact-detail';
+    detail.innerHTML = card(opened);
+    row.parentNode.insertBefore(detail, row.nextSibling);
   });
 
   /* ---------------- start-up ---------------- */

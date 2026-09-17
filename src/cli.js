@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const engine = require('./engine.js');
+const { checkDocs } = require('./check-docs.js');
 const { build, write } = require('./build.js');
 
 const ROOT = path.join(__dirname, '..');
@@ -22,6 +23,16 @@ const prefix = process.argv[3] || 'lastfm-report';
 
 if (!fs.existsSync(input)) {
   console.error('Cannot find the file: ' + input);
+  process.exit(1);
+}
+
+// Fail fast: a report that documents a case the README does not know about is a
+// report nobody can review.
+const docProblems = checkDocs();
+if (docProblems.length) {
+  console.error('The documentation is out of step with the engine:');
+  docProblems.forEach((problem) => console.error('  - ' + problem));
+  console.error('  (run node src/check-docs.js to see it on its own)');
   process.exit(1);
 }
 
