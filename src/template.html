@@ -177,6 +177,16 @@
   .scroller { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
   .decisions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
   .decisions .state { font-size: 12.5px; color: var(--muted); }
+  /* Picking which form to keep, when a finding offers alternatives. */
+  .choices { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .choices-label { font-size: 12.5px; color: var(--muted); }
+  .choice {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 6px; padding: 2px 9px; font-size: 12.5px; line-height: 1.6;
+    cursor: pointer; font-family: inherit; max-width: 100%; overflow-wrap: anywhere;
+  }
+  .choice:hover { border-color: var(--accent); color: var(--accent); }
+  .choice.on { border-color: var(--accent); color: var(--accent); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent); }
   .compact-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13.5px; }
   .compact-row:hover { background: var(--page); }
   .compact-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -477,6 +487,7 @@
   var L = window.LastfmLens;
   var report = window.__REPORT__ || null;
   var decisions = {};
+  var choices = {};
   var storageKey = null;
   var filters = { hidden: {}, confidence: null, text: '', actionableOnly: false, density: 'auto', sort: 'category' };
 
@@ -506,6 +517,24 @@
   function saveDecisions() {
     if (!storageKey) return;
     try { localStorage.setItem(storageKey, JSON.stringify(decisions)); } catch (e) {}
+  }
+
+  /**
+   * Which form to keep when a finding offers alternatives. Kept next to the
+   * decisions but under its own key, so the shape of the stored Accept/Discard
+   * marks does not change for anyone who already has one.
+   */
+  function loadChoices() {
+    choices = {};
+    if (!storageKey) return;
+    try {
+      choices = JSON.parse(localStorage.getItem(storageKey + ':choices') || '{}') || {};
+    } catch (e) { choices = {}; }
+  }
+
+  function saveChoices() {
+    if (!storageKey) return;
+    try { localStorage.setItem(storageKey + ':choices', JSON.stringify(choices)); } catch (e) {}
   }
 
   /**
@@ -599,6 +628,7 @@
 
   function render(data) {
     loadDecisions(data);
+    loadChoices();
     loadView();
     $('results').classList.remove('hidden');
     var m = data.meta;
@@ -714,10 +744,12 @@
     });
     $('printButton').addEventListener('click', function () { window.print(); });
     $('resetDecisions').addEventListener('click', function () {
-      if (!Object.keys(decisions).length) return;
-      if (!window.confirm('Clear every Accept and Discard in this report?')) return;
+      if (!Object.keys(decisions).length && !Object.keys(choices).length) return;
+      if (!window.confirm('Clear every Accept, Discard and chosen form in this report?')) return;
       decisions = {};
+      choices = {};
       saveDecisions();
+      saveChoices();
       renderList();
     });
     $('downloadMarkdown').addEventListener('click', function () {
@@ -730,7 +762,7 @@
       download('lastfm-report.json', L.toJSON(report), 'application/json');
     });
     $('downloadWorklist').addEventListener('click', function () {
-      download('lastfm-todo.md', L.toWorklist(report, decisions), 'text/markdown');
+      download('lastfm-todo.md', L.toWorklist(report, decisions, choices), 'text/markdown');
     });
 
     renderList();
@@ -755,7 +787,7 @@
    * text, which broke as soon as a cell contained a line break).
    */
   function decisionsCsv() {
-    return L.toCSV(report, { decisions: decisions, omitDiscarded: true });
+    return L.toCSV(report, { decisions: decisions, choices: choices, omitDiscarded: true });
   }
 
   var searchCache = {};
@@ -988,20 +1020,24 @@
     var state = decisions[f.id] || 'pending';
     var stateName = stateClass(state);
     var className = stateName ? ' ' + stateName : '';
+    // Everything the card shows about the action (title, current → proposed,
+    // impact, how-to) goes through the engine's view, so a chosen alternative is
+    // reflected everywhere instead of only in the line it was picked from.
+    var view = L.proposalOf(f, choices[f.id]);
     var html = [];
     html.push('<article class="card' + className + '" id="f-' + escapeHtml(f.id) + '">');
-    html.push('<h4>' + escapeHtml(f.title) + '</h4>');
+    html.push('<h4>' + escapeHtml(view.title) + '</h4>');
     html.push('<div class="tags">');
     html.push('<span class="tag e-' + f.confidence + '">' + f.confidence + ' · ' + f.points + '/100</span>');
-    if (f.impact) html.push('<span class="tag e-info">' + L.util.num(f.impact) + ' scrobbles</span>');
+    if (view.impact) html.push('<span class="tag e-info">' + L.util.num(view.impact) + ' scrobbles</span>');
     html.push('<span class="tag e-info">' + escapeHtml(f.actionLabel) + '</span>');
     if (!f.actionable) html.push('<span class="tag e-low">advisory · may be fine</span>');
     if (subtypeLabel(f)) html.push('<span class="tag e-info">' + escapeHtml(subtypeLabel(f)) + '</span>');
     html.push('</div>');
 
-    if (f.current || f.proposed) {
-      html.push('<div class="action-box"><span class="old">' + escapeHtml(f.current || '—') + '</span>' +
-        ' <span class="arrow">→</span> <span class="new">' + escapeHtml(f.proposed || '—') + '</span></div>');
+    if (view.current || view.proposed) {
+      html.push('<div class="action-box"><span class="old">' + escapeHtml(view.current || '—') + '</span>' +
+        ' <span class="arrow">→</span> <span class="new">' + escapeHtml(view.proposed || '—') + '</span></div>');
     }
     var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
     if (alarms.length) {
@@ -1046,12 +1082,21 @@
         (f.table.note ? '<p class="note">' + escapeHtml(f.table.note) + '</p>' : '') + '</details>');
     }
     if (f.alternatives && f.alternatives.length) {
-      html.push('<p class="note"><strong>Alternatives:</strong> ' + f.alternatives.map(function (a) {
-        return escapeHtml(a.value) + ' <span style="opacity:.7">(' + escapeHtml(a.reason) + ')</span>';
-      }).join(' · ') + '</p>');
+      // The proposal itself is the first option, so a chosen alternative can be
+      // undone here without discarding the finding. The reason rides on the
+      // tooltip to keep the row one line tall.
+      var chosen = choices[f.id] || f.proposed;
+      var pickable = [{ value: f.proposed, reason: 'the proposal above' }].concat(f.alternatives);
+      html.push('<div class="choices"><span class="choices-label">Keep instead:</span>' +
+        pickable.map(function (o) {
+          var on = o.value === chosen;
+          return '<button class="choice' + (on ? ' on' : '') + '" data-action="choose" data-id="' +
+            escapeHtml(f.id) + '" data-value="' + escapeHtml(o.value) + '" aria-pressed="' + on +
+            '" title="' + escapeHtml(o.reason || '') + '">' + escapeHtml(o.value) + '</button>';
+        }).join('') + '</div>');
     }
-    if (f.howTo) {
-      html.push('<details><summary>How to do it in Last.fm</summary><p class="note">' + escapeHtml(f.howTo) + '</p></details>');
+    if (view.howTo) {
+      html.push('<details><summary>How to do it in Last.fm</summary><p class="note">' + escapeHtml(view.howTo) + '</p></details>');
     }
     html.push('<div class="decisions">' +
       '<button class="button" data-action="accept" data-id="' + escapeHtml(f.id) + '"' +
@@ -1102,12 +1147,33 @@
     var button = e.target.closest('button[data-action]');
     if (button) {
       var id = button.dataset.id;
+      var finding = findingById(id);
+      if (button.dataset.action === 'choose') {
+        var value = button.dataset.value;
+        if (finding && value !== finding.proposed) choices[id] = value;
+        else delete choices[id];
+        saveChoices();
+        if (finding) {
+          var view = L.proposalOf(finding, choices[id]);
+          var cardElement = document.getElementById('f-' + id);
+          if (cardElement) cardElement.outerHTML = card(finding);
+          // A compact row carries no card until it is opened, so it is updated in
+          // place too, or it would keep showing the default title and impact.
+          var openRows = document.querySelectorAll('.compact-row[data-open]');
+          for (var q = 0; q < openRows.length; q++) {
+            if (openRows[q].dataset.open === id) {
+              openRows[q].querySelector('.t').textContent = view.title;
+              openRows[q].querySelector('.i').textContent = L.util.num(view.impact) + ' sc.';
+            }
+          }
+        }
+        return;
+      }
       if (button.dataset.action === 'pending') delete decisions[id];
       else decisions[id] = button.dataset.action;
       saveDecisions();
-      var finding = findingById(id);
-      var cardElement = document.getElementById('f-' + id);
-      if (cardElement && finding) cardElement.outerHTML = card(finding);
+      var cardElement2 = document.getElementById('f-' + id);
+      if (cardElement2 && finding) cardElement2.outerHTML = card(finding);
       var rows = document.querySelectorAll('.compact-row[data-open]');
       for (var r = 0; r < rows.length; r++) {
         if (rows[r].dataset.open === id) {

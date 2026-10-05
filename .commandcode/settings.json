@@ -5,7 +5,11 @@
       "Shell(node --version)",
       "Shell(node /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/probe.js)",
       "Shell(node /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/probe2.js)",
-      "Shell(npm:*)"
+      "Shell(npm:*)",
+      "Shell(node /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/probe3.js)",
+      "Shell(node /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/gen-report.js /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/report.html)",
+      "Shell(agent-browser:*)",
+      "Shell(cd /Users/marcosmarinm/Documents/Random/lastfm/lastfm-lens && node -e \" const fs=require('fs'); const html=fs.readFileSync('src/template.html','utf8'); const blocks=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].map(m=>m[1]); const ui=blocks[blocks.length-1]; fs.writeFileSync(process.env.COMMANDCODE_SCRATCHPAD+'/ui.js', ui); console.log('extracted UI script chars:', ui.length); \" && node --check \"$COMMANDCODE_SCRATCHPAD/ui.js\" && echo \"UI script: syntax OK\" && grep -c \"Keep instead\" index.html && grep -c \"proposalOf\" index.html)"
     ],
     "deny": [],
     "defaultMode": "default"

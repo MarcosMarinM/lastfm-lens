@@ -873,6 +873,23 @@
     return p;
   }
 
+  /**
+   * A complete proposal for keeping one variant as the target instead of the
+   * default canonical one: the same shape the finding itself carries
+   * (`current` → `proposed`, `impact`), so the interface can swap to it and the
+   * exports stay correct whatever is chosen.
+   */
+  function swapOption(target, variants, reason) {
+    var others = variants.filter(function (v) { return v.value !== target.value; });
+    return {
+      value: target.value,
+      reason: reason,
+      current: others.map(function (v) { return v.value; }).join('  /  '),
+      proposed: target.value,
+      impact: others.reduce(function (acc, v) { return acc + v.n; }, 0)
+    };
+  }
+
   function signal(text, level) {
     return { text: text, level: level || 'info' };
   }
@@ -1296,13 +1313,18 @@
     var alternatives = variants
       .filter(function (v) { return v.value !== target; })
       .map(function (v) {
-        return {
-          value: v.value,
-          reason:
-            num(v.n) + ' scrobbles · ' + shortDate(v.first) + ' → ' + shortDate(v.last) +
+        var option = swapOption(
+          v,
+          variants,
+          num(v.n) + ' scrobbles · ' + shortDate(v.first) + ' → ' + shortDate(v.last) +
             (v.value === frequent.value ? ' · the most frequent' : '') +
             (recent && v.value === recent.value ? ' · the most recent' : '')
-        };
+        );
+        var others = variants.filter(function (x) { return x.value !== v.value; });
+        option.title = others.length === 1
+          ? '“' + others[0].value + '” → “' + v.value + '”'
+          : others.length + ' forms of the same artist → “' + v.value + '”';
+        return option;
       });
     var nonCanonical = variants.filter(function (v) { return v.value !== target; });
     var finding = newFinding({
@@ -1867,7 +1889,14 @@
           ? { title: 'Tracks you also have under the base artist', items: examples }
           : null,
         alternatives: rest.map(function (r) {
-          return { value: r, reason: 'part of the combined name' };
+          return {
+            value: r,
+            reason: 'part of the combined name',
+            current: [group.name].concat(siblingNames).join('  /  '),
+            proposed: r,
+            impact: impact,
+            title: '“' + group.name + '” → “' + r + '”'
+          };
         })
       });
       if (siblingNames.length) {
@@ -2073,9 +2102,7 @@
           alternatives: ordered
             .filter(function (v) { return v.value !== canonical.value; })
             .slice(0, 3)
-            .map(function (v) {
-              return { value: v.value, reason: num(v.n) + ' scrobbles' };
-            })
+            .map(function (v) { return swapOption(v, variants, num(v.n) + ' scrobbles'); })
         });
         finding.__variants = variants
           .filter(function (v) { return v.value !== canonical.value; })
@@ -3157,12 +3184,52 @@
   }
 
   /**
+   * The proposal actually in force for a finding: its default one, or the
+   * alternative the interface recorded for it. Exports go through this, so a
+   * chosen alternative (the dash form instead of the bracket one, say) reaches
+   * actions.csv and the to-do list instead of the default.
+   */
+  function activeProposal(finding, choice) {
+    if (choice && choice !== finding.proposed && finding.alternatives) {
+      for (var i = 0; i < finding.alternatives.length; i++) {
+        var alt = finding.alternatives[i];
+        if (alt.value === choice && alt.proposed != null) return alt;
+      }
+    }
+    return finding;
+  }
+
+  /**
+   * The finding as it reads once a choice is taken into account: the default
+   * proposal, or the chosen alternative, with `howTo` regenerated from it so the
+   * instructions never describe a swap the export is not asking for. The interface
+   * and every export go through this, so they cannot disagree.
+   */
+  function proposalOf(finding, choice) {
+    var active = activeProposal(finding, choice);
+    var view = {
+      current: active.current,
+      proposed: active.proposed,
+      impact: active.impact != null ? active.impact : finding.impact,
+      title: active.title || finding.title
+    };
+    var action = ACTIONS[finding.action];
+    view.howTo = action
+      ? action.how(Object.assign({}, finding, {
+          current: view.current, proposed: view.proposed, impact: view.impact
+        }))
+      : finding.howTo;
+    return view;
+  }
+
+  /**
    * Action list, one row per finding, with an empty `decision` column so you can
    * mark accept/reject while you work through it.
    */
   function toCSV(report, options) {
     options = options || {};
     var decisions = options.decisions || {};
+    var choices = options.choices || {};
     var header = [
       'type', 'subtype', 'confidence', 'points', 'action', 'actionable', 'impact_scrobbles',
       'current_value', 'proposed_value', 'alternatives', 'signals', 'decision', 'evidence'
@@ -3173,6 +3240,7 @@
       // Discarded findings are dropped from the export by the interface, which is
       // the only place that knows about them; the CLI keeps every row.
       if (options.omitDiscarded && decision === 'discard') return;
+      var view = proposalOf(f, choices[f.id]);
       var evidence = '';
       if (f.evidence && f.evidence.items) {
         evidence = f.evidence.items
@@ -3185,8 +3253,8 @@
       }
       rows.push(
         [
-          f.type, f.subtype, f.confidence, f.points, f.action, f.actionable ? 'yes' : 'no', f.impact,
-          f.current, f.proposed,
+          f.type, f.subtype, f.confidence, f.points, f.action, f.actionable ? 'yes' : 'no', view.impact,
+          view.current, view.proposed,
           f.alternatives.map(function (a) { return a.value + ' (' + a.reason + ')'; }).join(' | '),
           f.signals.map(function (s) { return s.text; }).join(' | '),
           decision, evidence
@@ -3201,8 +3269,9 @@
    * This is what the Accept button is for: the report is for reading, this is the
    * working document.
    */
-  function toWorklist(report, decisions) {
+  function toWorklist(report, decisions, choices) {
     decisions = decisions || {};
+    choices = choices || {};
     var accepted = report.findings.filter(function (f) {
       return decisions[f.id] === 'accept';
     });
@@ -3212,7 +3281,8 @@
     lines.push('**Source:** ' + report.meta.source + '  ');
     lines.push(
       '**Accepted:** ' + num(accepted.length) + ' of ' + num(report.summary.findings) +
-        ' findings · **scrobbles to touch:** ' + num(accepted.reduce(function (acc, f) { return acc + f.impact; }, 0))
+        ' findings · **scrobbles to touch:** ' +
+        num(accepted.reduce(function (acc, f) { return acc + proposalOf(f, choices[f.id]).impact; }, 0))
     );
     lines.push('');
     if (!accepted.length) {
@@ -3241,13 +3311,14 @@
         return b.impact - a.impact || b.points - a.points;
       });
       list.forEach(function (f) {
-        lines.push('- [ ] ' + f.title);
+        var view = proposalOf(f, choices[f.id]);
+        lines.push('- [ ] ' + view.title);
         lines.push(
           '  - **' + f.actionLabel + '**' +
-            (f.current ? ' — `' + f.current + '` → `' + f.proposed + '`' : '') +
-            ' · ' + num(f.impact) + ' scrobble(s) · ' + f.confidence + ' ' + f.points + '/100'
+            (view.current ? ' — `' + view.current + '` → `' + view.proposed + '`' : '') +
+            ' · ' + num(view.impact) + ' scrobble(s) · ' + f.confidence + ' ' + f.points + '/100'
         );
-        if (f.howTo) lines.push('  - ' + f.howTo);
+        if (view.howTo) lines.push('  - ' + view.howTo);
       });
       lines.push('');
     });
@@ -3463,6 +3534,7 @@
     SUBTYPE_LABELS: SUBTYPE_LABELS,
     ACTIONS: ACTIONS,
     subtypeLabel: subtypeLabel,
+    proposalOf: proposalOf,
     parseCSV: parseCSV,
     readCSV: readCSV,
     analyse: analyse,

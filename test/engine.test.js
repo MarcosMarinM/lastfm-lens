@@ -186,3 +186,93 @@ test('an artist repeated inside the title is flagged', () => {
   assert.ok(finding, 'the repeated artist should be flagged');
   assert.equal(finding.proposed, 'Song');
 });
+
+/* --- Choosing an alternative ------------------------------------------------ */
+
+/** Two spellings of one title: 14 scrobbles with brackets, 9 with a dash. */
+function titleVariantFixture() {
+  const rows = [];
+  for (let i = 0; i < 14; i++) rows.push(['Zo\u00eb', 'Album', "Loin d'ici (Esc Version)", BASE + i * 1000]);
+  for (let i = 0; i < 9; i++) rows.push(['Zo\u00eb', 'Album', "Loin d'ici - ESC Version", BASE + 20000 + i * 1000]);
+  return rows;
+}
+
+test('an alternative carries the full swap, not just its value', () => {
+  const { report } = analyseRows(titleVariantFixture());
+  const finding = findingsOf(report, 'title_variants')[0];
+  assert.ok(finding.alternatives.length > 0, 'the two forms should offer an alternative');
+  finding.alternatives.forEach((alt) => {
+    assert.equal(alt.proposed, alt.value);
+    assert.ok(alt.current.indexOf(alt.value) < 0, 'the kept form is not on the "from" side');
+    assert.ok(alt.impact > 0);
+  });
+});
+
+test('proposalOf swaps to the chosen alternative and regenerates the how-to', () => {
+  const { report } = analyseRows(titleVariantFixture());
+  const finding = findingsOf(report, 'title_variants')[0];
+  const alt = finding.alternatives[0];
+
+  const fallback = engine.proposalOf(finding, null);
+  assert.equal(fallback.proposed, finding.proposed);
+  assert.equal(fallback.impact, finding.impact);
+
+  const chosen = engine.proposalOf(finding, alt.value);
+  assert.equal(chosen.proposed, alt.value);
+  assert.equal(chosen.current, alt.current);
+  assert.equal(chosen.impact, alt.impact);
+  assert.notEqual(chosen.impact, fallback.impact);
+  assert.ok(chosen.howTo.indexOf(alt.value) >= 0, 'the how-to names the chosen form');
+
+  // An unknown choice must not swap anything.
+  assert.equal(engine.proposalOf(finding, 'not-a-form').proposed, finding.proposed);
+});
+
+test('the exports honour the chosen alternative', () => {
+  const { report } = analyseRows(titleVariantFixture());
+  const finding = findingsOf(report, 'title_variants')[0];
+  const alt = finding.alternatives[0];
+  const decisions = { [finding.id]: 'accept' };
+  const choices = { [finding.id]: alt.value };
+
+  const row = engine
+    .toCSV(report, { decisions, choices })
+    .split('\n')
+    .find((line) => line.indexOf('title_variants') === 0);
+  const cols = row.split(';');
+  assert.equal(cols[6], String(alt.impact), 'impact_scrobbles reflects the choice');
+  assert.equal(cols[7], alt.current);
+  assert.equal(cols[8], alt.value);
+
+  const worklist = engine.toWorklist(report, decisions, choices);
+  assert.ok(worklist.indexOf('`' + alt.current + '` → `' + alt.value + '`') >= 0);
+  assert.ok(worklist.indexOf('· ' + alt.impact + ' scrobble(s)') >= 0);
+});
+
+test('a duplicate-artist alternative swaps the target the other way', () => {
+  const { report } = analyseRows(recencyFixture());
+  const finding = findingsOf(report, 'duplicate_artists')[0];
+  assert.equal(finding.proposed, 'Jana Burčeska');
+  const alt = finding.alternatives[0];
+  assert.equal(alt.value, 'Jana Burceska');
+  assert.equal(alt.proposed, 'Jana Burceska');
+  assert.equal(alt.current, 'Jana Burčeska');
+  assert.equal(alt.impact, 2);
+  assert.match(alt.title, /Jana Burčeska/);
+  assert.equal(engine.proposalOf(finding, alt.value).proposed, 'Jana Burceska');
+});
+
+test('proposalOf leaves a finding with no choice exactly as it was', () => {
+  const { report } = analyseRows([
+    ['Alpha', 'X', 'Song', BASE + 0],
+    ['Alpha', 'X', 'Song (Official Video)', BASE + 100],
+    ['Alpha', 'X', 'Song (Official Video)', BASE + 200]
+  ]);
+  const finding = findingsOf(report, 'title_variants').find((f) => f.subtype === 'platform_badge');
+  const view = engine.proposalOf(finding, null);
+  assert.equal(view.title, finding.title);
+  assert.equal(view.current, finding.current);
+  assert.equal(view.proposed, finding.proposed);
+  assert.equal(view.impact, finding.impact);
+  assert.equal(view.howTo, finding.howTo);
+});

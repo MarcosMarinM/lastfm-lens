@@ -357,6 +357,13 @@ into the report of another CSV. `actions.csv` carries them in its `decision` col
 (`accept` / `discard` / `pending`). The Markdown and JSON downloads do **not** carry them: those are
 the report, not your working list.
 
+**Choosing which form to keep.** When a card proposes a rename but more than one spelling could be the
+target (the bracket form or the dash one, two spellings of an artist), it lists them under **Keep
+instead** next to the proposal. Click one and the whole card follows it — the proposal line, the number
+of scrobbles the change touches and the Last.fm instructions — and so do the to-do list and
+`actions.csv`, which is what you work from. The default is always the first button; your pick is kept
+with the decisions, next to them in local storage, and cleared by **Reset all decisions**.
+
 ## Privacy
 
 The report page runs entirely in your browser. No server, no upload, no requests. The CSV never leaves
