@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(git:*)",
+      "Shell(node --version)",
+      "Shell(node /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/probe.js)",
+      "Shell(node /private/tmp/commandcode-501/-Users-marcosmarinm-Documents-Random-lastfm-lastfm-lens/2a40076c-8442-46d8-96dd-d95ec4392e68/scratchpad/probe2.js)",
+      "Shell(npm:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

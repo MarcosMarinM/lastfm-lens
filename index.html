@@ -1313,20 +1313,34 @@
 
   /** Picks the canonical value of a group of variants, per RULES.canonical. */
   function chooseCanonical(variants) {
+    if (RULES.canonical === 'recent') {
+      return variants.slice().sort(function (a, b) { return (b.last || 0) - (a.last || 0); })[0];
+    }
+    if (RULES.canonical === 'frequent') {
+      return variants.slice().sort(function (a, b) { return b.n - a.n; })[0];
+    }
+    // 'score': recency, measured against the group itself, so the most recent form
+    // takes its two points and the oldest none. Scoring every dated variant the
+    // same made recency inert, and the default silently ranked on frequency alone.
+    var newest = -Infinity;
+    var oldest = Infinity;
+    variants.forEach(function (v) {
+      if (!v.last) return;
+      if (v.last > newest) newest = v.last;
+      if (v.last < oldest) oldest = v.last;
+    });
+    var span = newest - oldest;
     var ordered = variants.slice().sort(function (a, b) {
-      if (RULES.canonical === 'recent') return (b.last || 0) - (a.last || 0);
-      if (RULES.canonical === 'frequent') return b.n - a.n;
-      return canonicalScore(b) - canonicalScore(a);
+      return canonicalScore(b, newest, span) - canonicalScore(a, newest, span);
     });
     return ordered[0];
   }
 
-  function canonicalScore(v) {
+  function canonicalScore(v, newest, span) {
     var p = 0;
-    if (v.last) p += 2; // recency: the user's rule, weighted highest
+    if (v.last) p += span > 0 ? 2 * (1 - (newest - v.last) / span) : 2; // recency, weighted highest
     p += Math.min(1, Math.log10(1 + v.n) / 2) * 1.5; // frequency
     p += Math.min(1, (v.value || '').length / 24) * 0.5; // more complete name
-    p += v.extra && v.extra.mostRecent ? 0.6 : 0;
     return p;
   }
 
@@ -1603,8 +1617,7 @@
       value: name,
       n: data.n,
       first: data.first,
-      last: data.last,
-      extra: { mostRecent: false }
+      last: data.last
     };
   }
 
@@ -3087,7 +3100,9 @@
         });
         finding.__duplicateIndexes = run.slice(1).map(function (x) { return x.i; });
         out.push(finding);
-        j = j - 1;
+        // Resume the outer scan after the whole run, so a run of N is reported
+        // once instead of once per starting position (N-1 overlapping findings).
+        i = j - 1;
       }
     }
     return out;
@@ -3377,8 +3392,8 @@
 
   function analyse(scrobbles, options) {
     options = options || {};
-    var overrides = Object.assign({}, RULES, options.rules || {});
     var originals = Object.assign({}, RULES);
+    var overrides = Object.assign({}, RULES, options.rules || {});
     Object.keys(overrides).forEach(function (k) {
       RULES[k] = overrides[k];
     });
@@ -3386,8 +3401,13 @@
     try {
       return analyseWith(scrobbles, options, started);
     } finally {
+      // Restore the shared RULES exactly: values back, and any key an override
+      // introduced removed, so it cannot leak into the next analyse() call.
       Object.keys(originals).forEach(function (k) {
         RULES[k] = originals[k];
+      });
+      Object.keys(RULES).forEach(function (k) {
+        if (!(k in originals)) delete RULES[k];
       });
     }
   }

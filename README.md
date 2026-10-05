@@ -21,6 +21,8 @@ the number of scrobbles affected and the concrete evidence, so you decide.
 | `src/build.js` | Packs the engine into the template → a single HTML file. |
 | `src/cli.js` | Command line: CSV in, report out. |
 | `src/check-docs.js` | Documentation self-check: fails if a finding type or sub-case is undocumented. |
+| `test/engine.test.js` | The test suite. Node's own runner and assertions, no dependencies. |
+| `package.json` | Scripts only, no dependencies: `npm test`, `npm run build`, `npm run report`. |
 
 The `.md`, `.csv` and `.json` versions of a report are **not** kept in the folder, because the report
 page can produce them itself with the buttons at the top (and the CLI regenerates them on demand). Your
@@ -60,6 +62,20 @@ node src/cli.js someone-else.csv their-report
 into `template.html` by `build.js`; no bundler, no dependencies, no network.
 
 The same CSV always produces exactly the same report.
+
+## Tests
+
+The engine has a test suite, run with Node's own runner (no dependencies, no test framework):
+
+```bash
+npm test            # or: node --test
+```
+
+It drives the engine the way `cli.js` and the report page do — a CSV in, a report out — and locks the
+behaviours this file promises: a run of repeated scrobbles is one finding and not one per starting
+position, the canonical form is chosen as described (recency weighted highest), `RULES` overrides are
+restored after every call, and the report is deterministic. `npm run check-docs` runs the documentation
+check on its own; `cli.js` and `build.js` also run it before writing anything.
 
 ## Is it code or AI?
 
