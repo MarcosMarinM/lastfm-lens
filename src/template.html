@@ -108,7 +108,7 @@
   /* Escape hatch in the heading of the flat sort modes, where no section heading
      is drawn and a switched-off section would otherwise only show as a dimmed chip. */
   .group-summary .button { font-size: 12px; padding: 2px 9px; margin-left: 6px; vertical-align: middle; }
-  input[type=search], select {
+  input[type=search], input[type=text], select {
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit;
   }
@@ -147,6 +147,18 @@
   .action-box .arrow { color: var(--muted); }
   .action-box .new { color: var(--high); font-weight: 700; }
   .action-box .old { color: var(--alarm); }
+  /* Direct links into Last.fm, so a finding can be acted on without retyping the
+     artist and track into the site's search box. */
+  .lastfm-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+  .lastfm-link {
+    border: 1px solid var(--border); background: var(--panel); color: var(--accent);
+    border-radius: 999px; padding: 3px 10px; font-size: 12.5px; text-decoration: none;
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+  .lastfm-link:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .lastfm-link::after { content: " ↗"; opacity: .7; }
+  #accountPanel .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #accountPanel input[type=text] { min-width: 16rem; }
   ul.signals { list-style: none; padding: 0; margin: 8px 0; }
   ul.signals li { position: relative; padding-left: 16px; margin-bottom: 3px; font-size: 13.5px; }
   ul.signals li::before {
@@ -277,6 +289,18 @@
 
   <div id="results" class="hidden">
     <div class="kpis" id="kpis"></div>
+
+    <div class="panel" id="accountPanel">
+      <div class="row">
+        <label class="rowlabel" for="username">Last.fm user</label>
+        <input type="text" id="username" placeholder="your-username" autocomplete="off" spellcheck="false">
+        <span class="note">
+          Each finding carries an <strong>Open in Last.fm</strong> link built from this name, so you can edit
+          the scrobble without searching for it. It is read from <code>lastfmstats-yourname.csv</code> when the
+          file name gives it; type it otherwise. Nothing is sent anywhere: the links only open Last.fm in a new tab.
+        </span>
+      </div>
+    </div>
 
     <div class="toolbar">
       <div class="row">
@@ -410,6 +434,9 @@
             Capitalisation alone is not damage: a name written twice with different capitals gets its own
             sub-case, is advisory and never counts as work, because nothing is broken and nothing is lost.
             An accent that went wrong, a broken quote or a stray space does count: those keep the high score.
+            A straight apostrophe in one form against a curly one in another (“Loin d'ici” against
+            “Loin d’ici”) is exactly that case: Last.fm keeps the two spellings apart, so the report proposes
+            a single one for the track, the artist and the album alike.
             A qualifier such as live, remix, acoustic or version marks a different recording, so those cases
             get their own group, are marked <em>advisory</em> (they are decisions to make, not merges to do)
             and never appear among the plain title variants. Their proposal prefers the plain form as the
@@ -459,6 +486,11 @@
       </ul>
       <h3>Making the changes in Last.fm</h3>
       <ul>
+        <li>Every card carries an <strong>Open in Last.fm</strong> link for the value it asks you to change:
+            the artist, the album or the track. It goes straight to the page where the Edit control lives, so
+            you do not have to search for the scrobble first. The links are built from your username, taken from
+            the file name (<code>lastfmstats-yourname.csv</code>) and editable in the panel at the top of the
+            report; nothing is sent anywhere, the links simply open Last.fm in a new tab.</li>
         <li>Edits to artist, track and album are <strong>retroactive</strong>: when you edit one scrobble,
             Last.fm offers to apply it to every scrobble of that combination (and renaming an artist affects the
             whole entry). It is a bulk change: look twice.</li>
@@ -559,6 +591,35 @@
     } catch (e) {}
   }
 
+  /**
+   * The Last.fm username the edit links are built from. It belongs to the account,
+   * not to the report, so it lives under one global key: it is the same name for
+   * every CSV you open. `lastfmstats-yourname.csv` carries it in the file name,
+   * which is where it comes from unless you type another one.
+   */
+  var USERNAME_KEY = 'lastfm-lens-username';
+
+  function usernameFromSource(source) {
+    var match = /^lastfmstats-(.+)\.csv$/i.exec(String(source || ''));
+    return match ? match[1] : '';
+  }
+
+  function loadUsername() {
+    try { return localStorage.getItem(USERNAME_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function saveUsername(value) {
+    try {
+      if (value) localStorage.setItem(USERNAME_KEY, value);
+      else localStorage.removeItem(USERNAME_KEY);
+    } catch (e) {}
+  }
+
+  function currentUsername() {
+    var input = $('username');
+    return input ? input.value.trim() : '';
+  }
+
   function escapeHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -630,6 +691,11 @@
     loadDecisions(data);
     loadChoices();
     loadView();
+    // The export file name carries the account ("lastfmstats-yourname.csv"); fall
+    // back to the last name typed when the file name does not give it.
+    var detectedUser = usernameFromSource(data.meta && data.meta.source);
+    if (detectedUser) saveUsername(detectedUser);
+    $('username').value = detectedUser || loadUsername();
     $('results').classList.remove('hidden');
     var m = data.meta;
     var affectedPct = m.scrobbles ? Math.round(100 * data.summary.affectedScrobbles / m.scrobbles) : 0;
@@ -753,7 +819,7 @@
       renderList();
     });
     $('downloadMarkdown').addEventListener('click', function () {
-      download('lastfm-report.md', L.toMarkdown(report), 'text/markdown');
+      download('lastfm-report.md', L.toMarkdown(report, { username: currentUsername() }), 'text/markdown');
     });
     $('downloadCsv').addEventListener('click', function () {
       download('lastfm-actions.csv', decisionsCsv(), 'text/csv');
@@ -762,7 +828,11 @@
       download('lastfm-report.json', L.toJSON(report), 'application/json');
     });
     $('downloadWorklist').addEventListener('click', function () {
-      download('lastfm-todo.md', L.toWorklist(report, decisions, choices), 'text/markdown');
+      download(
+        'lastfm-todo.md',
+        L.toWorklist(report, decisions, choices, { username: currentUsername() }),
+        'text/markdown'
+      );
     });
 
     renderList();
@@ -1039,6 +1109,21 @@
       html.push('<div class="action-box"><span class="old">' + escapeHtml(view.current || '—') + '</span>' +
         ' <span class="arrow">→</span> <span class="new">' + escapeHtml(view.proposed || '—') + '</span></div>');
     }
+    // One link per value the finding asks you to change, so the page you edit is
+    // one click away instead of a search for the artist and the track. They come
+    // from the view, so choosing another form under “Keep instead” moves the links
+    // to the values that actually have to change. The links are only built once a
+    // username is known; the panel above says where it comes from.
+    var targets = view.targets || [];
+    var username = currentUsername();
+    if (targets.length && username) {
+      html.push('<div class="lastfm-links"><span class="rowlabel">Open in Last.fm</span>' +
+        targets.map(function (t) {
+          return '<a class="lastfm-link" target="_blank" rel="noopener" title="Edit this scrobble in Last.fm"' +
+            ' href="' + escapeHtml(L.util.lastfmUrl(username, t)) + '">' +
+            escapeHtml(L.util.targetLabel(t)) + '</a>';
+        }).join('') + '</div>');
+    }
     var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
     if (alarms.length) {
       html.push('<div class="alarm-box">Careful: ' + alarms.map(function (s) {
@@ -1201,6 +1286,13 @@
   });
 
   /* ---------------- start-up ---------------- */
+
+  // Registered once, outside render(), so dropping a second CSV does not stack
+  // listeners on the same input. Changing the name only re-draws the links.
+  $('username').addEventListener('input', function () {
+    saveUsername(this.value.trim());
+    if (report) renderList();
+  });
 
   if (report) {
     dropzone.classList.add('hidden');

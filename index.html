@@ -108,7 +108,7 @@
   /* Escape hatch in the heading of the flat sort modes, where no section heading
      is drawn and a switched-off section would otherwise only show as a dimmed chip. */
   .group-summary .button { font-size: 12px; padding: 2px 9px; margin-left: 6px; vertical-align: middle; }
-  input[type=search], select {
+  input[type=search], input[type=text], select {
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit;
   }
@@ -147,6 +147,18 @@
   .action-box .arrow { color: var(--muted); }
   .action-box .new { color: var(--high); font-weight: 700; }
   .action-box .old { color: var(--alarm); }
+  /* Direct links into Last.fm, so a finding can be acted on without retyping the
+     artist and track into the site's search box. */
+  .lastfm-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+  .lastfm-link {
+    border: 1px solid var(--border); background: var(--panel); color: var(--accent);
+    border-radius: 999px; padding: 3px 10px; font-size: 12.5px; text-decoration: none;
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+  .lastfm-link:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .lastfm-link::after { content: " ↗"; opacity: .7; }
+  #accountPanel .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #accountPanel input[type=text] { min-width: 16rem; }
   ul.signals { list-style: none; padding: 0; margin: 8px 0; }
   ul.signals li { position: relative; padding-left: 16px; margin-bottom: 3px; font-size: 13.5px; }
   ul.signals li::before {
@@ -277,6 +289,18 @@
 
   <div id="results" class="hidden">
     <div class="kpis" id="kpis"></div>
+
+    <div class="panel" id="accountPanel">
+      <div class="row">
+        <label class="rowlabel" for="username">Last.fm user</label>
+        <input type="text" id="username" placeholder="your-username" autocomplete="off" spellcheck="false">
+        <span class="note">
+          Each finding carries an <strong>Open in Last.fm</strong> link built from this name, so you can edit
+          the scrobble without searching for it. It is read from <code>lastfmstats-yourname.csv</code> when the
+          file name gives it; type it otherwise. Nothing is sent anywhere: the links only open Last.fm in a new tab.
+        </span>
+      </div>
+    </div>
 
     <div class="toolbar">
       <div class="row">
@@ -410,6 +434,9 @@
             Capitalisation alone is not damage: a name written twice with different capitals gets its own
             sub-case, is advisory and never counts as work, because nothing is broken and nothing is lost.
             An accent that went wrong, a broken quote or a stray space does count: those keep the high score.
+            A straight apostrophe in one form against a curly one in another (“Loin d'ici” against
+            “Loin d’ici”) is exactly that case: Last.fm keeps the two spellings apart, so the report proposes
+            a single one for the track, the artist and the album alike.
             A qualifier such as live, remix, acoustic or version marks a different recording, so those cases
             get their own group, are marked <em>advisory</em> (they are decisions to make, not merges to do)
             and never appear among the plain title variants. Their proposal prefers the plain form as the
@@ -459,6 +486,11 @@
       </ul>
       <h3>Making the changes in Last.fm</h3>
       <ul>
+        <li>Every card carries an <strong>Open in Last.fm</strong> link for the value it asks you to change:
+            the artist, the album or the track. It goes straight to the page where the Edit control lives, so
+            you do not have to search for the scrobble first. The links are built from your username, taken from
+            the file name (<code>lastfmstats-yourname.csv</code>) and editable in the panel at the top of the
+            report; nothing is sent anywhere, the links simply open Last.fm in a new tab.</li>
         <li>Edits to artist, track and album are <strong>retroactive</strong>: when you edit one scrobble,
             Last.fm offers to apply it to every scrobble of that combination (and renaming an artist affects the
             whole entry). It is a bulk change: look twice.</li>
@@ -801,12 +833,20 @@
     }
   }
 
-  /** Unifies quotes, dashes and "exotic" spaces that would split equal keys. */
+  /**
+   * Cleans a tag for storage and display: dashes and "exotic" spaces are unified,
+   * invisible characters dropped, runs of spaces collapsed.
+   *
+   * Quote characters are deliberately NOT folded here (`’` is not turned into
+   * `'`). Last.fm keeps them apart, so “Loin d’ici” and “Loin d'ici” are two
+   * different track entries; folding them at read time left a single spelling to
+   * compare and made exactly the variant this report exists to find invisible.
+   * The comparison keys (`key`, `artistKey`, `strictTitleKey`) throw punctuation
+   * away, so they still treat the two as equal where that is the right call.
+   */
   function normaliseText(s) {
     if (s == null) return '';
     return String(s)
-      .replace(/[\u2018\u2019\u201B\u2032\u02BC`\u00B4]/g, "'")
-      .replace(/[\u201C\u201D\u2033\u00AB\u00BB]/g, '"')
       .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-')
       .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
       .replace(/[\u200B-\u200F\u2028\u2029\uFEFF\uFFFD]/g, '')
@@ -814,10 +854,32 @@
       .trim();
   }
 
+  // The quote characters Last.fm keeps apart and that a report has to notice:
+  // the straight ones plus their typographic twins. The modifier-letter set
+  // (U+02B9 prime, U+02BB ʻokina, U+02BC apostrophe, U+02BD–U+02BF) is included
+  // because those are apostrophes in use even though Unicode files them as
+  // letters, which is why the punctuation-stripping pass in key() misses them.
+  var RE_SINGLE_QUOTES = /[\u2018\u2019\u201B\u2032\u02B9\u02BB\u02BC\u02BD\u02BE\u02BF`\u00B4]/g;
+  var RE_DOUBLE_QUOTES = /[\u201C\u201D\u2033\u00AB\u00BB]/g;
+
+  /**
+   * Folds the typographic quotes to their straight forms. Used only by the “is
+   * this nothing but typography?” tests (album and title formatting), never to
+   * store a value: the straight and curly spellings have to stay distinguishable
+   * so the report can propose unifying them.
+   */
+  function foldQuotes(s) {
+    return String(s == null ? '' : s).replace(RE_SINGLE_QUOTES, "'").replace(RE_DOUBLE_QUOTES, '"');
+  }
+
   /** Comparison key: no accents, lower case, no punctuation. */
   function key(s) {
     var h = stripAccents(normaliseText(s)).toLowerCase();
-    h = h.replace(RE_NON_ALPHANUMERIC, ' ').replace(RE_SPACES, ' ').trim();
+    h = h
+      .replace(RE_SINGLE_QUOTES, ' ')
+      .replace(RE_NON_ALPHANUMERIC, ' ')
+      .replace(RE_SPACES, ' ')
+      .trim();
     return h;
   }
 
@@ -1358,16 +1420,19 @@
    * A complete proposal for keeping one variant as the target instead of the
    * default canonical one: the same shape the finding itself carries
    * (`current` → `proposed`, `impact`), so the interface can swap to it and the
-   * exports stay correct whatever is chosen.
+   * exports stay correct whatever is chosen. `targetFor` turns one of the
+   * discarded variants into the scrobble to edit, so the Last.fm links follow the
+   * swap the way the action line does.
    */
-  function swapOption(target, variants, reason) {
+  function swapOption(target, variants, reason, targetFor) {
     var others = variants.filter(function (v) { return v.value !== target.value; });
     return {
       value: target.value,
       reason: reason,
       current: others.map(function (v) { return v.value; }).join('  /  '),
       proposed: target.value,
-      impact: others.reduce(function (acc, v) { return acc + v.n; }, 0)
+      impact: others.reduce(function (acc, v) { return acc + v.n; }, 0),
+      targets: targetFor ? others.map(targetFor) : []
     };
   }
 
@@ -1379,6 +1444,54 @@
   function subtypeLabel(type, subtype) {
     var map = SUBTYPE_LABELS[type];
     return (map && map[subtype || '']) || '';
+  }
+
+  /**
+   * A scrobble to open in Last.fm: the artist, plus the track or the album whose
+   * page carries the Edit control. `targets` on a finding are the values it asks
+   * you to change, in the order the card names them (the "from" side of a rename,
+   * never the proposal).
+   */
+  function editTarget(artist, track, album) {
+    var t = { artist: artist || '' };
+    if (track) t.track = track;
+    if (album) t.album = album;
+    return t;
+  }
+
+  /** Human label for a target, matching the way the report names artists/tracks. */
+  function targetLabel(t) {
+    if (!t) return '';
+    if (t.track) return t.artist + ' — ' + t.track;
+    if (t.album) return t.artist + ' — ' + t.album;
+    return t.artist;
+  }
+
+  /**
+   * One URL path segment the way Last.fm writes it: spaces become “+”, and the
+   * characters encodeURIComponent leaves bare but that are not URL-safe in a path
+   * (`! ' ( ) *`) are percent-encoded too, so a title such as “Song (Live)” reads
+   * as `Song+%28Live%29` rather than being left half-encoded.
+   */
+  function lastfmSegment(value) {
+    return encodeURIComponent(String(value == null ? '' : value))
+      .replace(/[!'()*]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); })
+      .replace(/%20/g, '+');
+  }
+
+  /**
+   * The Last.fm page for a target: an artist’s library, an album page, or a
+   * track’s page — `/music/<artist>/_/<track>`, where `_` is Last.fm’s stand-in
+   * for “whatever album”. This is the page the Edit control lives on.
+   * Returns '' when there is no username or no artist to point at.
+   */
+  function lastfmUrl(username, target) {
+    if (!username || !target || !target.artist) return '';
+    var url =
+      'https://www.last.fm/user/' + lastfmSegment(username) + '/library/music/' + lastfmSegment(target.artist);
+    if (target.track) return url + '/_/' + lastfmSegment(target.track);
+    if (target.album) return url + '/' + lastfmSegment(target.album);
+    return url;
   }
 
   function newFinding(options) {
@@ -1400,7 +1513,10 @@
       evidence: options.evidence || null,
       table: options.table || null,
       warning: options.warning || '',
-      informational: !!options.informational
+      informational: !!options.informational,
+      // The scrobbles to open in Last.fm (see editTarget). Empty for findings
+      // that summarise many values and point at no single page.
+      targets: options.targets || []
     };
     f.confidence = confidence(f.points);
     var action = ACTIONS[f.action];
@@ -1799,7 +1915,8 @@
           variants,
           num(v.n) + ' scrobbles · ' + shortDate(v.first) + ' → ' + shortDate(v.last) +
             (v.value === frequent.value ? ' · the most frequent' : '') +
-            (recent && v.value === recent.value ? ' · the most recent' : '')
+            (recent && v.value === recent.value ? ' · the most recent' : ''),
+          function (variant) { return editTarget(variant.value); }
         );
         var others = variants.filter(function (x) { return x.value !== v.value; });
         option.title = others.length === 1
@@ -1838,6 +1955,7 @@
         };
       });
     finding.__artists = nonCanonical.map(function (v) { return v.value; });
+    finding.targets = nonCanonical.map(function (v) { return editTarget(v.value); });
     return finding;
   }
 
@@ -2034,6 +2152,7 @@
                 }
           });
           finding.__artists = [suspect.name];
+          finding.targets = [editTarget(suspect.name)];
           out.push(finding);
         }
       }
@@ -2210,6 +2329,7 @@
         evidence: { title: 'Full form', items: [{ a: group.current, b: num(group.n) + ' scrobbles' }] }
       });
       finding.__variants = [[group.artist, group.current]];
+      finding.targets = [editTarget(group.artist, group.current)];
       out.push(finding);
     });
     return out;
@@ -2393,6 +2513,7 @@
           );
       }
       finding.__artists = [group.name].concat(siblingNames);
+      finding.targets = [group.name].concat(siblingNames).map(function (name) { return editTarget(name); });
       out.push(finding);
     });
     return out;
@@ -2583,11 +2704,18 @@
           alternatives: ordered
             .filter(function (v) { return v.value !== canonical.value; })
             .slice(0, 3)
-            .map(function (v) { return swapOption(v, variants, num(v.n) + ' scrobbles'); })
+            .map(function (v) {
+              return swapOption(v, variants, num(v.n) + ' scrobbles', function (variant) {
+                return editTarget(artist, variant.value);
+              });
+            })
         });
         finding.__variants = variants
           .filter(function (v) { return v.value !== canonical.value; })
           .map(function (v) { return [artist, v.value]; });
+        finding.targets = variants
+          .filter(function (v) { return v.value !== canonical.value; })
+          .map(function (v) { return editTarget(artist, v.value); });
         out.push(finding);
       });
     });
@@ -2703,6 +2831,7 @@
               }
             });
             finding.__variants = [[artist.name, rareForm]];
+            finding.targets = [editTarget(artist.name, rareForm)];
             out.push(finding);
           }
         }
@@ -2873,6 +3002,7 @@
             }
           });
           finding.__variants = bucket.forms.map(function (b) { return [artist.name, b.value]; });
+          finding.targets = bucket.forms.map(function (b) { return editTarget(artist.name, b.value); });
           out.push(finding);
         });
       });
@@ -2943,6 +3073,7 @@
           }
         });
         missingFinding.__emptyAlbums = [[group.artist, group.trackKey]];
+        missingFinding.targets = [editTarget(group.artist, title)];
         out.push(missingFinding);
       }
       if (group.albums.size > 1) {
@@ -2990,6 +3121,7 @@
         clash.__albums = ranked
           .filter(function (e) { return e[0] !== canonical.value; })
           .map(function (e) { return [group.artist, group.trackKey, e[0]]; });
+        clash.targets = [editTarget(group.artist, title)];
         out.push(clash);
       }
     });
@@ -3000,8 +3132,11 @@
       var spellings = entry.spellings;
       if (spellings.size < 2) return;
       var ranked = Array.from(spellings.entries()).sort(function (x, y) { return y[1] - x[1]; });
-      // Only when the difference is capitalisation/accents/spaces/quotes
-      var flattened = new Set(ranked.map(function (e) { return stripAccents(e[0]).toLowerCase(); }));
+      // Only when the difference is capitalisation/accents/spaces/quotes. Quotes
+      // are folded here rather than in normaliseText, so a straight apostrophe
+      // against a curly one is seen as a spelling of the same album instead of
+      // being silently collapsed into a single value at read time.
+      var flattened = new Set(ranked.map(function (e) { return stripAccents(foldQuotes(e[0])).toLowerCase(); }));
       if (flattened.size !== 1) return;
       var canonical = ranked[0][0];
       var impact = ranked.reduce(function (acc, e) { return e[0] === canonical ? acc : acc + e[1]; }, 0);
@@ -3044,6 +3179,9 @@
           evidence: evidence
         });
         cosmeticFinding.__albumsGlobal = affected;
+        cosmeticFinding.targets = otherForms.map(function (form) {
+          return editTarget(entry.artist, null, form);
+        });
         cosmetic.push(cosmeticFinding);
         return;
       }
@@ -3057,7 +3195,7 @@
         current: otherForms.join('  /  '),
         proposed: canonical,
         signals: [
-          signal('The same album written with different capitalisation, accents or spacing', 'strong'),
+          signal('The same album written with different capitalisation, accents, quotes or spacing', 'strong'),
           sameArtist
         ],
         // No claim about how Last.fm's catalogue treats capitalisation: the CSV
@@ -3065,12 +3203,13 @@
         // name twice, which is what the card asks to fix.
         explanation:
           'This album appears under “' + entry.artist + '” with ' + ranked.length + ' spellings that differ ' +
-          'in capitalisation, accents or spacing, so one album is written twice in this library. The ' +
+          'in capitalisation, accents, quotes or spacing, so one album is written twice in this library. The ' +
           'proposal keeps “' + canonical + '”, the form with the most scrobbles; nothing changes in Last.fm ' +
           'until you edit those scrobbles yourself.',
         evidence: evidence
       });
       finding.__albumsGlobal = affected;
+      finding.targets = otherForms.map(function (form) { return editTarget(entry.artist, null, form); });
       cosmetic.push(finding);
     });
     cosmetic.sort(function (a, b) { return b.impact - a.impact; });
@@ -3136,6 +3275,7 @@
           }
         });
         finding.__duplicateIndexes = run.slice(1).map(function (x) { return x.i; });
+        finding.targets = [editTarget(s.artist, s.title)];
         out.push(finding);
         // Resume the outer scan after the whole run, so a run of N is reported
         // once instead of once per starting position (N-1 overlapping findings).
@@ -3268,6 +3408,7 @@
         }
       });
       finding.__artists = [r.name];
+      finding.targets = [editTarget(r.name)];
       out.push(finding);
     });
 
@@ -3692,7 +3833,12 @@
       current: active.current,
       proposed: active.proposed,
       impact: active.impact != null ? active.impact : finding.impact,
-      title: active.title || finding.title
+      title: active.title || finding.title,
+      // Which scrobbles to open in Last.fm: the default targets, or the ones the
+      // chosen alternative carries (see swapOption). A chosen option without its
+      // own targets — the combined-artist parts, whose "from" side never changes —
+      // falls back to the finding's.
+      targets: (active.targets && active.targets.length ? active.targets : finding.targets) || []
     };
     var action = ACTIONS[finding.action];
     view.howTo = action
@@ -3701,6 +3847,21 @@
         }))
       : finding.howTo;
     return view;
+  }
+
+  /**
+   * Markdown links for a finding's targets, or [] when no username was given to
+   * point at. Used by the to-do list and the Markdown report, so the pages you
+   * edit in Last.fm are one click away.
+   */
+  function targetLinks(username, targets) {
+    if (!username || !targets || !targets.length) return [];
+    return targets
+      .map(function (t) {
+        var url = lastfmUrl(username, t);
+        return url ? '[' + targetLabel(t) + '](' + url + ')' : null;
+      })
+      .filter(Boolean);
   }
 
   /**
@@ -3750,9 +3911,11 @@
    * This is what the Accept button is for: the report is for reading, this is the
    * working document.
    */
-  function toWorklist(report, decisions, choices) {
+  function toWorklist(report, decisions, choices, options) {
     decisions = decisions || {};
     choices = choices || {};
+    options = options || {};
+    var username = options.username || '';
     var accepted = report.findings.filter(function (f) {
       return decisions[f.id] === 'accept';
     });
@@ -3800,13 +3963,17 @@
             ' · ' + num(view.impact) + ' scrobble(s) · ' + f.confidence + ' ' + f.points + '/100'
         );
         if (view.howTo) lines.push('  - ' + view.howTo);
+        var links = targetLinks(username, view.targets);
+        if (links.length) lines.push('  - Open in Last.fm: ' + links.join(' · '));
       });
       lines.push('');
     });
     return lines.join('\n');
   }
 
-  function toMarkdown(report) {
+  function toMarkdown(report, options) {
+    options = options || {};
+    var username = options.username || '';
     var m = report.meta;
     var lines = [];
     lines.push('# Last.fm Lens — scrobble cleanup report');
@@ -3990,6 +4157,11 @@
           lines.push('');
           lines.push('**How to do it in Last.fm:** ' + f.howTo);
         }
+        var links = targetLinks(username, f.targets);
+        if (links.length) {
+          lines.push('');
+          lines.push('**Open in Last.fm:** ' + links.join(' · '));
+        }
         lines.push('');
       });
     });
@@ -4024,6 +4196,8 @@
     toCSV: toCSV,
     toJSON: toJSON,
     util: {
+      lastfmUrl: lastfmUrl,
+      targetLabel: targetLabel,
       key: key,
       artistKey: artistKey,
       looseTitleKey: looseTitleKey,
@@ -4117,6 +4291,35 @@
     } catch (e) {}
   }
 
+  /**
+   * The Last.fm username the edit links are built from. It belongs to the account,
+   * not to the report, so it lives under one global key: it is the same name for
+   * every CSV you open. `lastfmstats-yourname.csv` carries it in the file name,
+   * which is where it comes from unless you type another one.
+   */
+  var USERNAME_KEY = 'lastfm-lens-username';
+
+  function usernameFromSource(source) {
+    var match = /^lastfmstats-(.+)\.csv$/i.exec(String(source || ''));
+    return match ? match[1] : '';
+  }
+
+  function loadUsername() {
+    try { return localStorage.getItem(USERNAME_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function saveUsername(value) {
+    try {
+      if (value) localStorage.setItem(USERNAME_KEY, value);
+      else localStorage.removeItem(USERNAME_KEY);
+    } catch (e) {}
+  }
+
+  function currentUsername() {
+    var input = $('username');
+    return input ? input.value.trim() : '';
+  }
+
   function escapeHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -4188,6 +4391,11 @@
     loadDecisions(data);
     loadChoices();
     loadView();
+    // The export file name carries the account ("lastfmstats-yourname.csv"); fall
+    // back to the last name typed when the file name does not give it.
+    var detectedUser = usernameFromSource(data.meta && data.meta.source);
+    if (detectedUser) saveUsername(detectedUser);
+    $('username').value = detectedUser || loadUsername();
     $('results').classList.remove('hidden');
     var m = data.meta;
     var affectedPct = m.scrobbles ? Math.round(100 * data.summary.affectedScrobbles / m.scrobbles) : 0;
@@ -4311,7 +4519,7 @@
       renderList();
     });
     $('downloadMarkdown').addEventListener('click', function () {
-      download('lastfm-report.md', L.toMarkdown(report), 'text/markdown');
+      download('lastfm-report.md', L.toMarkdown(report, { username: currentUsername() }), 'text/markdown');
     });
     $('downloadCsv').addEventListener('click', function () {
       download('lastfm-actions.csv', decisionsCsv(), 'text/csv');
@@ -4320,7 +4528,11 @@
       download('lastfm-report.json', L.toJSON(report), 'application/json');
     });
     $('downloadWorklist').addEventListener('click', function () {
-      download('lastfm-todo.md', L.toWorklist(report, decisions, choices), 'text/markdown');
+      download(
+        'lastfm-todo.md',
+        L.toWorklist(report, decisions, choices, { username: currentUsername() }),
+        'text/markdown'
+      );
     });
 
     renderList();
@@ -4597,6 +4809,21 @@
       html.push('<div class="action-box"><span class="old">' + escapeHtml(view.current || '—') + '</span>' +
         ' <span class="arrow">→</span> <span class="new">' + escapeHtml(view.proposed || '—') + '</span></div>');
     }
+    // One link per value the finding asks you to change, so the page you edit is
+    // one click away instead of a search for the artist and the track. They come
+    // from the view, so choosing another form under “Keep instead” moves the links
+    // to the values that actually have to change. The links are only built once a
+    // username is known; the panel above says where it comes from.
+    var targets = view.targets || [];
+    var username = currentUsername();
+    if (targets.length && username) {
+      html.push('<div class="lastfm-links"><span class="rowlabel">Open in Last.fm</span>' +
+        targets.map(function (t) {
+          return '<a class="lastfm-link" target="_blank" rel="noopener" title="Edit this scrobble in Last.fm"' +
+            ' href="' + escapeHtml(L.util.lastfmUrl(username, t)) + '">' +
+            escapeHtml(L.util.targetLabel(t)) + '</a>';
+        }).join('') + '</div>');
+    }
     var alarms = f.signals.filter(function (s) { return s.level === 'alarm'; });
     if (alarms.length) {
       html.push('<div class="alarm-box">Careful: ' + alarms.map(function (s) {
@@ -4759,6 +4986,13 @@
   });
 
   /* ---------------- start-up ---------------- */
+
+  // Registered once, outside render(), so dropping a second CSV does not stack
+  // listeners on the same input. Changing the name only re-draws the links.
+  $('username').addEventListener('input', function () {
+    saveUsername(this.value.trim());
+    if (report) renderList();
+  });
 
   if (report) {
     dropzone.classList.add('hidden');

@@ -267,6 +267,23 @@ only” cards. Capitalisation changes nothing about the song or the album, so th
   capitalisation is not something a CSV can tell you, so the card does not claim it either way. If you
   like the library tidy, Accept them into the to-do list; if not, Discard them and they stay quiet.
 
+### Straight and curly apostrophes
+
+`Loin d'ici` and `Loin d’ici` look the same on the page, but Last.fm keeps them apart: they are two
+different track entries, and the same goes for an artist (`Guns N' Roses`) or an album. The report
+treats them as a “Formatting only” case — a rename to do — and proposes keeping one spelling.
+
+That works because the engine no longer folds the two when it reads the CSV. It used to turn `’` into
+`'` on the way in, which left a single spelling to compare and made exactly this variant invisible, the
+one case the report exists to catch. The comparison keys (`key`, `artistKey`, `strictTitleKey`) still
+throw punctuation away, so the two are read as the same thing wherever that is the right call.
+
+The characters covered are the straight apostrophe plus `’` `‘` `‛` `′` (prime), the backtick and the
+acute accent, and the modifier-letter apostrophes `ʼ` `ʻ` `ʾ` `ʿ` — Unicode files those as letters, so
+they would slip past a plain punctuation strip. An album whose only difference is the apostrophe is a
+“name variant” for the same reason, and the check that treats two album spellings as one now folds the
+quotes before deciding.
+
 ### Titles carrying a platform badge
 
 “Song (Official Video)”, “Song (Official Audio)”, “Song (Lyric Video)”, “Song (Video Oficial)”, “Song
@@ -326,6 +343,7 @@ The page is one list, and every control exists to cut it down:
 | **Sort** | *Grouped by category* keeps the sections and their sub-cases, ordering the groups inside a section by their strongest finding (within a group it is confidence, then impact, then points). *Biggest impact first* and *Highest confidence first* drop the grouping and give one flat list. |
 | **Density** | *auto* shows a group as one line per finding when it holds more than 25; *one line each* forces that everywhere; *every card open* expands everything. A compact line carries its own ✓ / ✗, so a finding can be decided without opening it. |
 | **Actionable only** | Hides the advisory findings, the ones that may well be correct. |
+| **Last.fm user** | The account the **Open in Last.fm** links are built from, read from `lastfmstats-yourname.csv` and editable if the file name does not give it. It is remembered across reports and never sent anywhere. |
 | **Downloads & help** | The to-do list, the report in Markdown, the actions CSV, the JSON, Print / PDF and a reset for all of your decisions. |
 
 The line above the list always says what you are looking at: how many findings are visible, how many
@@ -336,6 +354,13 @@ Printing switches to *every card open* first, so a printed page carries the cont
 the one-line list.
 
 ## Making the changes in Last.fm
+
+Each card carries an **Open in Last.fm** link for the value it asks you to change — the artist, the
+album or the track — so you land on the page where the Edit control lives instead of searching for the
+scrobble yourself. The links are built from your username, taken from the file name
+(`lastfmstats-yourname.csv`); if the file was renamed, type it in the panel at the top of the report
+(it is remembered, and it is never sent anywhere — the links only open Last.fm in a new tab). The
+**to-do list** and the **Markdown report** carry the same links when a username is set.
 
 Artist, track and album edits are retroactive: Last.fm offers to apply them to every scrobble of that
 combination, and renaming an artist affects the whole entry. It is a bulk change — look twice.

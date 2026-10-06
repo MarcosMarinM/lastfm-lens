@@ -187,6 +187,49 @@ test('an artist repeated inside the title is flagged', () => {
   assert.equal(finding.proposed, 'Song');
 });
 
+/* --- Typographic quotes ----------------------------------------------------- */
+
+test('a straight apostrophe and a curly one are two spellings of the title', () => {
+  const { report } = analyseRows([
+    ['Zoë', 'Album', "Loin d'ici", BASE + 0],
+    ['Zoë', 'Album', 'Loin d\u2019ici', BASE + 100]
+  ]);
+  const finding = findingsOf(report, 'title_variants')[0];
+  assert.ok(finding, 'the two quote spellings must not be collapsed into one');
+  assert.equal(finding.subtype, 'formatting');
+  assert.equal(finding.current, 'Loin d\u2019ici');
+  assert.equal(finding.proposed, "Loin d'ici");
+});
+
+test('the modifier-letter apostrophe (U+02BC) is compared like a straight one', () => {
+  const { report } = analyseRows([
+    ['Zoë', 'Album', "Loin d'ici", BASE + 0],
+    ['Zoë', 'Album', 'Loin d\u02BCici', BASE + 100]
+  ]);
+  const finding = findingsOf(report, 'title_variants')[0];
+  assert.ok(finding, 'U+02BC is a letter in Unicode but an apostrophe here');
+  assert.equal(finding.subtype, 'formatting');
+});
+
+test('a curly apostrophe in an artist name is the same artist', () => {
+  const { report } = analyseRows([
+    ["Guns N' Roses", 'Album', 'Song', BASE + 0],
+    ['Guns N\u2019 Roses', 'Album', 'Song', BASE + 100]
+  ]);
+  const finding = findingsOf(report, 'duplicate_artists')[0];
+  assert.ok(finding, 'the two spellings should be proposed as one artist');
+  assert.equal(finding.subtype, 'identical');
+});
+
+test('a curly apostrophe in an album name is a name variant', () => {
+  const { report } = analyseRows([
+    ['Zoë', "Loin d'ici", 'One', BASE + 0],
+    ['Zoë', 'Loin d\u2019ici', 'Two', BASE + 100]
+  ]);
+  const finding = findingsOf(report, 'albums').find((f) => f.subtype === 'name_variants');
+  assert.ok(finding, 'the two album spellings should be reported');
+});
+
 /* --- Choosing an alternative ------------------------------------------------ */
 
 /** Two spellings of one title: 14 scrobbles with brackets, 9 with a dash. */
@@ -205,6 +248,8 @@ test('an alternative carries the full swap, not just its value', () => {
     assert.equal(alt.proposed, alt.value);
     assert.ok(alt.current.indexOf(alt.value) < 0, 'the kept form is not on the "from" side');
     assert.ok(alt.impact > 0);
+    assert.ok(alt.targets.length > 0, 'the alternative carries the scrobbles to edit');
+    assert.ok(!alt.targets.some((t) => t.track === alt.value), 'the kept form is not a link target');
   });
 });
 
@@ -216,6 +261,7 @@ test('proposalOf swaps to the chosen alternative and regenerates the how-to', ()
   const fallback = engine.proposalOf(finding, null);
   assert.equal(fallback.proposed, finding.proposed);
   assert.equal(fallback.impact, finding.impact);
+  assert.deepEqual(fallback.targets, finding.targets);
 
   const chosen = engine.proposalOf(finding, alt.value);
   assert.equal(chosen.proposed, alt.value);
@@ -223,6 +269,10 @@ test('proposalOf swaps to the chosen alternative and regenerates the how-to', ()
   assert.equal(chosen.impact, alt.impact);
   assert.notEqual(chosen.impact, fallback.impact);
   assert.ok(chosen.howTo.indexOf(alt.value) >= 0, 'the how-to names the chosen form');
+  // The Last.fm links have to follow the swap: the form that was the proposal is
+  // now the one that has to change.
+  assert.deepEqual(chosen.targets, alt.targets);
+  assert.ok(chosen.targets.some((t) => t.track === finding.proposed));
 
   // An unknown choice must not swap anything.
   assert.equal(engine.proposalOf(finding, 'not-a-form').proposed, finding.proposed);
@@ -259,7 +309,11 @@ test('a duplicate-artist alternative swaps the target the other way', () => {
   assert.equal(alt.current, 'Jana Burčeska');
   assert.equal(alt.impact, 2);
   assert.match(alt.title, /Jana Burčeska/);
-  assert.equal(engine.proposalOf(finding, alt.value).proposed, 'Jana Burceska');
+  // Keeping the other spelling means “Jana Burčeska” is what has to be renamed.
+  assert.deepEqual(alt.targets, [{ artist: 'Jana Burčeska' }]);
+  const chosen = engine.proposalOf(finding, alt.value);
+  assert.equal(chosen.proposed, 'Jana Burceska');
+  assert.deepEqual(chosen.targets, [{ artist: 'Jana Burčeska' }]);
 });
 
 test('proposalOf leaves a finding with no choice exactly as it was', () => {
@@ -275,4 +329,64 @@ test('proposalOf leaves a finding with no choice exactly as it was', () => {
   assert.equal(view.proposed, finding.proposed);
   assert.equal(view.impact, finding.impact);
   assert.equal(view.howTo, finding.howTo);
+});
+
+/* --- Last.fm edit links ----------------------------------------------------- */
+
+test('lastfmUrl points at the artist, album and track pages, Last.fm-encoded', () => {
+  const { lastfmUrl } = engine.util;
+  assert.equal(
+    lastfmUrl('MarcosMarinM', { artist: 'Jana Burčeska', track: 'Gruda' }),
+    'https://www.last.fm/user/MarcosMarinM/library/music/Jana+Bur%C4%8Deska/_/Gruda'
+  );
+  assert.equal(
+    lastfmUrl('someone', { artist: 'A & B', album: 'X/Y' }),
+    'https://www.last.fm/user/someone/library/music/A+%26+B/X%2FY'
+  );
+  assert.equal(
+    lastfmUrl('someone', { artist: 'Zoë', track: "Loin d'ici (Live)" }),
+    'https://www.last.fm/user/someone/library/music/Zo%C3%AB/_/Loin+d%27ici+%28Live%29'
+  );
+  assert.equal(
+    lastfmUrl('someone', { artist: 'Solo' }),
+    'https://www.last.fm/user/someone/library/music/Solo'
+  );
+  assert.equal(lastfmUrl('', { artist: 'Solo' }), '', 'no username means no link');
+  assert.equal(lastfmUrl('someone', { artist: '' }), '', 'no artist means no link');
+});
+
+test('findings carry the values to edit as targets', () => {
+  const badgeReport = analyseRows([
+    ['Alpha', 'X', 'Song', BASE + 0],
+    ['Alpha', 'X', 'Song (Official Video)', BASE + 100],
+    ['Alpha', 'X', 'Song (Official Video)', BASE + 200]
+  ]).report;
+  const badge = findingsOf(badgeReport, 'title_variants').find((f) => f.subtype === 'platform_badge');
+  assert.deepEqual(badge.targets, [{ artist: 'Alpha', track: 'Song (Official Video)' }]);
+
+  const artistReport = analyseRows(recencyFixture()).report;
+  const duplicate = findingsOf(artistReport, 'duplicate_artists')[0];
+  assert.deepEqual(duplicate.targets, [{ artist: 'Jana Burceska' }], 'the name to rename, not the proposal');
+
+  const albumReport = analyseRows([
+    ['Alpha', 'Café', 'One', BASE + 0],
+    ['Alpha', 'Cafe', 'Two', BASE + 10]
+  ]).report;
+  const album = findingsOf(albumReport, 'albums').find((f) => f.subtype === 'name_variants');
+  assert.deepEqual(album.targets, [{ artist: 'Alpha', album: 'Cafe' }]);
+});
+
+test('the to-do list and Markdown carry edit links only when a username is given', () => {
+  const { report } = analyseRows([
+    ['Alpha', 'X', 'Song', BASE + 0],
+    ['Alpha', 'X', 'Song', BASE + 10]
+  ]);
+  const finding = findingsOf(report, 'duplicate_scrobbles')[0];
+  const decisions = { [finding.id]: 'accept' };
+  const url = 'https://www.last.fm/user/me/library/music/Alpha/_/Song';
+
+  assert.ok(engine.toWorklist(report, decisions, null).indexOf('Open in Last.fm') < 0);
+  assert.ok(engine.toWorklist(report, decisions, null, { username: 'me' }).indexOf(url) >= 0);
+  assert.ok(engine.toMarkdown(report).indexOf('**Open in Last.fm:**') < 0);
+  assert.ok(engine.toMarkdown(report, { username: 'me' }).indexOf(url) >= 0);
 });
