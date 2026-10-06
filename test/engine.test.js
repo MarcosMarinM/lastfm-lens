@@ -230,6 +230,34 @@ test('a curly apostrophe in an album name is a name variant', () => {
   assert.ok(finding, 'the two album spellings should be reported');
 });
 
+/* --- Versions vs spellings -------------------------------------------------- */
+
+test('a version written two ways is merged on its own, not with the plain title', () => {
+  const rows = [];
+  for (let i = 0; i < 10; i++) rows.push(['Chanel', 'Album', 'SloMo', BASE + i]);
+  for (let i = 0; i < 5; i++) rows.push(['Chanel', 'Album', "SloMo (Eurovision's Dancebreak Edit)", BASE + 100 + i]);
+  rows.push(['Chanel', 'Album', "SloMo - Eurovision's Dancebreak Edit", BASE + 200]);
+
+  const { report } = analyseRows(rows);
+  const variants = findingsOf(report, 'title_variants');
+  assert.equal(variants.length, 2, 'the versions must not collapse into a single finding');
+
+  const merge = variants.find((f) => f.subtype === 'qualifier_formatting');
+  assert.ok(merge, 'the two written forms of the edit are one rename to do');
+  assert.ok(merge.actionable);
+  assert.equal(merge.subtype, 'qualifier_formatting');
+  assert.equal(merge.current, "SloMo - Eurovision's Dancebreak Edit");
+  assert.equal(merge.proposed, "SloMo (Eurovision's Dancebreak Edit)");
+  assert.equal(merge.impact, 1);
+
+  const version = variants.find((f) => f.subtype === 'version_marker');
+  assert.ok(version, 'the edit against the plain title is a version difference');
+  assert.equal(version.actionable, false, 'a different version is advisory');
+  assert.equal(version.proposed, 'SloMo');
+  assert.ok(version.current.indexOf('Dancebreak Edit') >= 0);
+  assert.ok(version.current.indexOf(' - ') < 0, 'the two written forms are not lumped together');
+});
+
 /* --- Choosing an alternative ------------------------------------------------ */
 
 /** Two spellings of one title: 14 scrobbles with brackets, 9 with a dash. */

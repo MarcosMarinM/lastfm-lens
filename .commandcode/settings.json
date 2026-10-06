@@ -25,7 +25,10 @@
       "Shell(node --test 2>&1 | tail -12 && echo \"--- docs ---\" && node src/check-docs.js && echo \"--- build ---\" && node src/build.js && node -e \" const fs=require('fs');const html=fs.readFileSync('index.html','utf8'); [...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].forEach((m,i)=>{try{new Function(m[1]);}catch(e){console.log('block',i,'PARSE ERROR',e.message);process.exit(1);}}); console.log('embedded scripts parse OK'); \")",
       "Shell(node \"$COMMANDCODE_SCRATCHPAD/quote-check.js\")",
       "Shell(node /quote-check.js)",
-      "Shell(node --test 2>&1 | tail -8 && echo \"--- docs ---\" && node src/check-docs.js && echo \"--- build ---\" && node src/build.js && node -e \"const fs=require('fs');const h=fs.readFileSync('index.html','utf8');[...h.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].forEach((m,i)=>{try{new Function(m[1]);}catch(e){console.log('PARSE ERROR block',i,e.message);process.exit(1)}});console.log('scripts parse OK')\"; rm -f \"$COMMANDCODE_SCRATCHPAD/quote-check.js\")"
+      "Shell(node --test 2>&1 | tail -8 && echo \"--- docs ---\" && node src/check-docs.js && echo \"--- build ---\" && node src/build.js && node -e \"const fs=require('fs');const h=fs.readFileSync('index.html','utf8');[...h.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].forEach((m,i)=>{try{new Function(m[1]);}catch(e){console.log('PARSE ERROR block',i,e.message);process.exit(1)}});console.log('scripts parse OK')\"; rm -f \"$COMMANDCODE_SCRATCHPAD/quote-check.js\")",
+      "Shell(node \"$COMMANDCODE_SCRATCHPAD/slomo-check.js\")",
+      "Shell(node /slomo-check.js)",
+      "Shell(node --test 2>&1 | tail -8 && echo \"--- docs ---\" && node src/check-docs.js && echo \"--- build ---\" && node src/build.js && node -e \"const fs=require('fs');const h=fs.readFileSync('index.html','utf8');[...h.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].forEach((m,i)=>{try{new Function(m[1]);}catch(e){console.log('PARSE ERROR',i,e.message);process.exit(1)}});console.log('scripts parse OK')\"; rm -f \"$COMMANDCODE_SCRATCHPAD/slomo-check.js\")"
     ],
     "deny": [],
     "defaultMode": "default"

@@ -331,6 +331,21 @@ The words that trigger this live in `RE_DIFFERENT_VERSION` in `src/engine.js`: l
 acoustic, remix, remaster, instrumental, karaoke, cover, version, demo, mono/stereo, radio edit,
 soundtrack, banda sonora, orchestral and a few more.
 
+### A version written two ways is not a different version
+
+Within one title the spellings are first sorted into **versions** by their qualifier: the plain title is
+one version, `(Dancebreak Edit)` is another, `(Live)` a third. That matters because a version can itself
+be written two ways — `SloMo (Eurovision's Dancebreak Edit)` and `SloMo - Eurovision's Dancebreak Edit`
+are the *same* recording, not two of them. So:
+
+- the two written forms of one version are a **rename to do** among themselves (`Qualifier written
+  differently`): keep one and apply it to the other;
+- only then are the versions compared with one spelling each, and that comparison is the **advisory**
+  one (`Probably a different version`). Plain `SloMo` is never lumped in with the edit.
+
+Before this split the whole group was treated as one finding, which proposed renaming both written forms
+of the edit into plain `SloMo` — the exact thing the section exists to warn against.
+
 ## Reading the report
 
 The page is one list, and every control exists to cut it down:

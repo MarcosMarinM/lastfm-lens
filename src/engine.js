@@ -2020,6 +2020,162 @@
 
   /* --- 6.4 Inconsistent track titles ---------------------------------------- */
 
+  /**
+   * One finding for a set of spellings of the same title, or null when there is
+   * nothing to change.
+   *
+   * The set is either the spellings of ONE version — they share a qualifier key,
+   * as “Song (Live)” and “Song - Live” do — or one spelling per version, when the
+   * versions themselves are compared.
+   */
+  function buildTitleVariantFinding(artist, variants) {
+    var strictKeys = new Set(variants.map(function (v) { return v.strict; }));
+    var qualifiers = new Set(variants.map(function (v) { return v.qualifiers || ''; }));
+    var withoutQualifier = variants.filter(function (v) { return !v.qualifiers; });
+    var withQualifier = variants.filter(function (v) { return v.qualifiers; });
+    // Is the featuring credit the only difference?
+    var signatures = new Set(
+      variants.map(function (v) {
+        var parts = titleParts(v.value);
+        var others = parts.qualifiers.filter(function (q) {
+          return !/^\s*(feat|featuring|ft|with|con)\b/.test(q);
+        });
+        return key(parts.base) + '|' + others.join(',');
+      })
+    );
+    var featuringOnly =
+      signatures.size === 1 &&
+      variants.some(function (v) {
+        return /\b(feat|featuring|ft|with)\b/.test(key(v.value));
+      });
+    var caseOnly = new Set(variants.map(function (v) { return v.value.toLowerCase(); })).size === 1;
+    var points;
+    var signals = [];
+    var warning = '';
+    var subtype;
+    var action = 'rename_track';
+    if (featuringOnly && strictKeys.size > 1) {
+      subtype = 'featuring';
+      points = 55;
+      signals.push(
+        signal('Same title, but one form carries the featuring credit in brackets and the other does not', 'strong')
+      );
+      warning =
+        'In Last.fm the featuring credit usually stays in the title ONLY if the main artist does not ' +
+        'already carry it. Pick one of the two forms and apply it to all of them.';
+    } else if (caseOnly) {
+      // Capitalisation alone changes nothing about the track and carries no
+      // information, so it gets its own sub-case and does not count as work.
+      subtype = 'case_only';
+      action = 'review_capitalisation';
+      points = 44;
+      signals.push(signal('The forms differ only in capitalisation', 'strong'));
+    } else if (qualifiers.size === 1 && withQualifier.length === variants.length) {
+      // One version, its qualifier written differently: in brackets in one form
+      // and after a dash in the other. This is a rename to do among the spellings
+      // of the same recording.
+      subtype = 'qualifier_formatting';
+      points = 78;
+      signals.push(signal('Same qualifier, but in brackets in one form and after a dash in the other', 'strong'));
+    } else if (strictKeys.size === 1) {
+      // The same title bar accents, quotes or spaces: damaged tagging (a wrong
+      // accent, a broken quote) rather than a different recording.
+      subtype = 'formatting';
+      points = 85;
+      signals.push(signal('Written identically except for accents, quotes or spaces', 'strong'));
+    } else if (withoutQualifier.length && withQualifier.length) {
+      signals.push(signal('One form carries no qualifier and the other does', 'medium'));
+      if (withQualifier.some(function (v) { return v.differentVersion; })) {
+        // “Patata” against “Patata (live)”. The qualifier claims a different
+        // recording, so this is not a merge to do but a decision to make: it
+        // gets its own sub-case, away from the ordinary title variants, and it
+        // does not count as work to do.
+        subtype = 'version_marker';
+        action = 'review_track';
+        points = 40;
+        signals.push(
+          signal('The other form says it is a different recording: “' + qualifierList(withQualifier) + '”', 'strong')
+        );
+        warning =
+          'Careful: that qualifier (live, remix, acoustic, version…) usually means a DIFFERENT ' +
+          'recording. Do not merge without checking.';
+      } else {
+        subtype = 'one_qualified';
+        points = 52;
+      }
+    } else {
+      subtype = 'different_qualifiers';
+      action = 'review_track';
+      points = 38;
+      signals.push(signal('The qualifiers differ from one another', 'weak'));
+      warning = 'These may well be different versions. Check them one by one before merging.';
+    }
+    var ordered = variants.slice().sort(function (x, y) { return y.n - x.n; });
+    var canonical = chooseCanonical(ordered);
+    // With a version marker the plain form is the safer proposal: the qualified
+    // one explicitly claims to be a different recording, so renaming the plain
+    // scrobbles into it would invent a credit they never had. Choosing on
+    // recency or on name length picked “Amarcord - Acoustic Version” as the
+    // target and told you to turn “Amarcord” into it.
+    if (subtype === 'version_marker' && withoutQualifier.length) {
+      canonical = withoutQualifier.slice().sort(function (x, y) { return y.n - x.n; })[0];
+    }
+    var impact = variants.reduce(function (acc, v) {
+      return v.value === canonical.value ? acc : acc + v.n;
+    }, 0);
+    if (!impact) return null;
+    var examples = ordered.map(function (v) {
+      return { a: v.value, b: num(v.n) + ' scrobble(s)' };
+    });
+    var finding = newFinding({
+      type: 'title_variants',
+      subtype: subtype,
+      title: '“' + artist + '” — ' + variants.length + ' forms of the same title',
+      points: points + Math.min(8, Math.log10(1 + impact) * 6),
+      impact: impact,
+      action: action,
+      current: variants
+        .filter(function (v) { return v.value !== canonical.value; })
+        .map(function (v) { return v.value; })
+        .join('  /  '),
+      proposed: canonical.value,
+      signals: signals,
+      warning: warning,
+      explanation:
+        'Under “' + artist + '” you have ' + variants.length + ' different forms of the same title. ' +
+        'The proposal is to keep “' + canonical.value + '” (' + num(canonical.n) + ' scrobbles) and ' +
+        'change ' + num(impact) + ' scrobble(s) of the other forms.' +
+        (caseOnly
+          ? ' Capitalisation is the only difference, so nothing here is damaged and nothing is lost: ' +
+            'unifying them is tidiness, not a fix, which is why it is not counted as work to do. ' +
+            'Whether Last.fm draws a line between two spellings that differ only in capitalisation is ' +
+            'not something this file can tell you.'
+          : ''),
+      evidence: { title: 'Forms found', items: examples },
+      alternatives: ordered
+        .filter(function (v) { return v.value !== canonical.value; })
+        .slice(0, 3)
+        .map(function (v) {
+          return swapOption(v, variants, num(v.n) + ' scrobbles', function (variant) {
+            return editTarget(artist, variant.value);
+          });
+        })
+    });
+    finding.__variants = variants
+      .filter(function (v) { return v.value !== canonical.value; })
+      .map(function (v) { return [artist, v.value]; });
+    finding.targets = variants
+      .filter(function (v) { return v.value !== canonical.value; })
+      .map(function (v) { return editTarget(artist, v.value); });
+    return finding;
+  }
+
+  /**
+   * The same title written in several ways under one artist. The spellings are
+   * first sorted into versions by their qualifier, so a version written more than
+   * one way is merged on its own and never lumped together with a different
+   * version of the same song.
+   */
   function detectTitleVariants(scrobbles) {
     var byArtist = new Map(); // artist -> Map(loose key -> Map(raw title -> n))
     for (var i = 0; i < scrobbles.length; i++) {
@@ -2064,146 +2220,48 @@
           return !v.platformBadge;
         });
         if (variants.length < 2) return;
-        var strictKeys = new Set(variants.map(function (v) { return v.strict; }));
-        var qualifiers = new Set(variants.map(function (v) { return v.qualifiers || ''; }));
-        var withoutQualifier = variants.filter(function (v) { return !v.qualifiers; });
-        var withQualifier = variants.filter(function (v) { return v.qualifiers; });
-        // Is the featuring credit the only difference?
-        var signatures = new Set(
-          variants.map(function (v) {
-            var parts = titleParts(v.value);
-            var others = parts.qualifiers.filter(function (q) {
-              return !/^\s*(feat|featuring|ft|with|con)\b/.test(q);
-            });
-            return key(parts.base) + '|' + others.join(',');
-          })
-        );
-        var featuringOnly =
-          signatures.size === 1 &&
-          variants.some(function (v) {
-            return /\b(feat|featuring|ft|with)\b/.test(key(v.value));
-          });
-        var points;
-        var signals = [];
-        var warning = '';
-        var subtype;
-        var action = 'rename_track';
-        var caseOnly = false;
-        if (featuringOnly && strictKeys.size > 1) {
-          subtype = 'featuring';
-          points = 55;
-          signals.push(
-            signal('Same title, but one form carries the featuring credit in brackets and the other does not', 'strong')
-          );
-          warning =
-            'In Last.fm the featuring credit usually stays in the title ONLY if the main artist does not ' +
-            'already carry it. Pick one of the two forms and apply it to all of them.';
-        } else if (strictKeys.size === 1) {
-          // The forms are the same title bar capitalisation, accents, quotes or spaces.
-          // Which of those it is matters, so they are split apart: a wrong accent or a
-          // broken quote is damaged tagging, while a difference of capitalisation alone
-          // changes nothing about the track and carries no information. That second kind
-          // gets its own sub-case and does not count as work to do.
-          caseOnly = new Set(variants.map(function (v) { return v.value.toLowerCase(); })).size === 1;
-          if (caseOnly) {
-            subtype = 'case_only';
-            action = 'review_capitalisation';
-            points = 44;
-            signals.push(signal('The forms differ only in capitalisation', 'strong'));
-          } else {
-            subtype = 'formatting';
-            points = 85;
-            signals.push(signal('Written identically except for accents, quotes or spaces', 'strong'));
+
+        // Group the spellings into VERSIONS by their qualifier: the empty
+        // qualifier is the plain version (“SloMo”), each distinct qualifier is
+        // another one (“…Dancebreak Edit”), and the spellings inside a version
+        // differ only in how it is written (“(Dancebreak Edit)” / “- Dancebreak
+        // Edit”). Comparing every spelling against every other one lumped the two
+        // written forms of the edit together with the plain title, so they were
+        // proposed as one rename into “SloMo” — exactly what must not happen.
+        var buckets = new Map();
+        variants.forEach(function (v) {
+          var bucketKey = v.qualifiers || '';
+          var bucket = buckets.get(bucketKey);
+          if (!bucket) {
+            bucket = [];
+            buckets.set(bucketKey, bucket);
           }
-        } else if (qualifiers.size === 1 && withQualifier.length === variants.length) {
-          subtype = 'qualifier_formatting';
-          points = 78;
-          signals.push(signal('Same qualifier, but in brackets in one form and after a dash in the other', 'strong'));
-        } else if (withoutQualifier.length && withQualifier.length) {
-          signals.push(signal('One form carries no qualifier and the other does', 'medium'));
-          if (withQualifier.some(function (v) { return v.differentVersion; })) {
-            // “Patata” against “Patata (live)”. The qualifier claims a different
-            // recording, so this is not a merge to do but a decision to make: it
-            // gets its own sub-case, away from the ordinary title variants, and it
-            // does not count as work to do.
-            subtype = 'version_marker';
-            action = 'review_track';
-            points = 40;
-            signals.push(
-              signal('The other form says it is a different recording: “' + qualifierList(withQualifier) + '”', 'strong')
-            );
-            warning =
-              'Careful: that qualifier (live, remix, acoustic, version…) usually means a DIFFERENT ' +
-              'recording. Do not merge without checking.';
-          } else {
-            subtype = 'one_qualified';
-            points = 52;
+          bucket.push(v);
+        });
+
+        if (buckets.size === 1) {
+          var only = buildTitleVariantFinding(artist, variants);
+          if (only) out.push(only);
+          return;
+        }
+
+        // More than one version. A version written more than one way is a rename
+        // among its own spellings, and the versions are then compared with one
+        // spelling each, so that rename is not proposed a second time inside the
+        // version comparison. “SloMo - Eurovision's Dancebreak Edit” is thus
+        // merged with “SloMo (Eurovision's Dancebreak Edit)”, and the two of them
+        // stay apart from plain “SloMo”.
+        var representatives = [];
+        buckets.forEach(function (bucket) {
+          if (bucket.length > 1) {
+            var merge = buildTitleVariantFinding(artist, bucket);
+            if (merge) out.push(merge);
           }
-        } else {
-          subtype = 'different_qualifiers';
-          action = 'review_track';
-          points = 38;
-          signals.push(signal('The qualifiers differ from one another', 'weak'));
-          warning = 'These may well be different versions. Check them one by one before merging.';
-        }
-        var ordered = variants.slice().sort(function (x, y) { return y.n - x.n; });
-        var canonical = chooseCanonical(ordered);
-        // With a version marker the plain form is the safer proposal: the qualified
-        // one explicitly claims to be a different recording, so renaming the plain
-        // scrobbles into it would invent a credit they never had. Choosing on
-        // recency or on name length picked “Amarcord - Acoustic Version” as the
-        // target and told you to turn “Amarcord” into it.
-        if (subtype === 'version_marker' && withoutQualifier.length) {
-          canonical = withoutQualifier.slice().sort(function (x, y) { return y.n - x.n; })[0];
-        }
-        var impact = variants.reduce(function (acc, v) {
-          return v.value === canonical.value ? acc : acc + v.n;
-        }, 0);
-        if (!impact) return;
-        var examples = ordered.map(function (v) {
-          return { a: v.value, b: num(v.n) + ' scrobble(s)' };
+          // The most-scrobbled spelling stands for the version in the comparison.
+          representatives.push(bucket.slice().sort(function (a, b) { return b.n - a.n; })[0]);
         });
-        var finding = newFinding({
-          type: 'title_variants',
-          subtype: subtype,
-          title: '“' + artist + '” — ' + variants.length + ' forms of the same title',
-          points: points + Math.min(8, Math.log10(1 + impact) * 6),
-          impact: impact,
-          action: action,
-          current: variants
-            .filter(function (v) { return v.value !== canonical.value; })
-            .map(function (v) { return v.value; })
-            .join('  /  '),
-          proposed: canonical.value,
-          signals: signals,
-          warning: warning,
-          explanation:
-            'Under “' + artist + '” you have ' + variants.length + ' different forms of the same title. ' +
-            'The proposal is to keep “' + canonical.value + '” (' + num(canonical.n) + ' scrobbles) and ' +
-            'change ' + num(impact) + ' scrobble(s) of the other forms.' +
-            (caseOnly
-              ? ' Capitalisation is the only difference, so nothing here is damaged and nothing is lost: ' +
-                'unifying them is tidiness, not a fix, which is why it is not counted as work to do. ' +
-                'Whether Last.fm draws a line between two spellings that differ only in capitalisation is ' +
-                'not something this file can tell you.'
-              : ''),
-          evidence: { title: 'Forms found', items: examples },
-          alternatives: ordered
-            .filter(function (v) { return v.value !== canonical.value; })
-            .slice(0, 3)
-            .map(function (v) {
-              return swapOption(v, variants, num(v.n) + ' scrobbles', function (variant) {
-                return editTarget(artist, variant.value);
-              });
-            })
-        });
-        finding.__variants = variants
-          .filter(function (v) { return v.value !== canonical.value; })
-          .map(function (v) { return [artist, v.value]; });
-        finding.targets = variants
-          .filter(function (v) { return v.value !== canonical.value; })
-          .map(function (v) { return editTarget(artist, v.value); });
-        out.push(finding);
+        var cross = buildTitleVariantFinding(artist, representatives);
+        if (cross) out.push(cross);
       });
     });
     return out;
